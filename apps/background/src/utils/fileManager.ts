@@ -8,26 +8,20 @@ const dataDir = path.join(__pkgdir, 'data');
 // 기본 데이터 정의
 const defaultData = {
   fanscore: [
-    {
-      user_id: 1,
-      nickname: "샘플 사용자",
-      score: 0,
-      rank: 1,
-      chat_count: 0,
-      like_count: 0,
-      spoon_count: 0
-    }
   ],
   
   'fanscore-config': {
     enabled: true,
+    attendance_score: 10,
     chat_score: 1,
-    like_score: 2,
-    spoon_score: 50,
+    like_score: 10,
+    spoon_score: 100,
     quiz_enabled: false,
     quiz_bonus: 10,
+    quiz_interval: 180,
+    quiz_timeout: 5,
     lottery_enabled: false,
-    lottery_percentage: 0.1
+    lottery_spoon_required: 50
   },
   
   templates: [

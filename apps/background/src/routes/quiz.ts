@@ -2,7 +2,25 @@ import express from 'express';
 import logger from '../utils/logger';
 import { getDataFile, saveDataFile } from '../utils/fileManager';
 
+const { BrowserWindow } = require('electron');
 const router = express.Router();
+
+// 워커에 퀴즈 업데이트 알림
+function notifyWorkerQuizUpdate() {
+  try {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window) {
+      window.webContents.send('starter-pack.sopia.dev', {
+        channel: 'quiz-updated'
+      });
+      logger.debug('Worker notified of quiz update');
+    }
+  } catch (error: any) {
+    logger.warn('Failed to notify worker of quiz update', {
+      error: error?.message || 'Unknown error'
+    });
+  }
+}
 
 // 퀴즈 목록 조회
 router.get('/', (req, res) => {
@@ -55,6 +73,9 @@ router.post('/', (req, res) => {
       question: newQuiz.question
     });
     
+    // 워커에 알림
+    notifyWorkerQuizUpdate();
+    
     res.json(newQuiz);
   } catch (error: any) {
     logger.error('Failed to create quiz', {
@@ -102,6 +123,9 @@ router.put('/:quizId', (req, res) => {
       newQuestion: data[quizIndex].question
     });
     
+    // 워커에 알림
+    notifyWorkerQuizUpdate();
+    
     res.json(data[quizIndex]);
   } catch (error: any) {
     logger.error('Failed to update quiz', {
@@ -136,6 +160,9 @@ router.delete('/:quizId', (req, res) => {
       quizId,
       question: deletedQuiz.question
     });
+    
+    // 워커에 알림
+    notifyWorkerQuizUpdate();
     
     res.json({ message: 'Quiz deleted successfully' });
   } catch (error: any) {

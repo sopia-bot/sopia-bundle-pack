@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { StickerDialogButton, findSticker, useStickerStore } from '../components/StickerDialog';
+import type { Sticker } from '@sopia-bot/core';
 import { toast } from 'sonner';
 
 interface TemplateItem {
@@ -31,12 +33,24 @@ interface Template {
 
 export function TemplateSettings() {
   const { templates, fetchTemplates } = useAppStore();
+  const { allStickerList } = useStickerStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
 
   useEffect(() => {
     fetchTemplates();
   }, [fetchTemplates]);
+
+  // 스티커 이름으로 스티커 객체 찾기
+  useEffect(() => {
+    if (editingTemplate?.sticker && allStickerList.length > 0) {
+      const sticker = findSticker(allStickerList, editingTemplate.sticker);
+      setSelectedSticker(sticker);
+    } else {
+      setSelectedSticker(null);
+    }
+  }, [editingTemplate?.sticker, allStickerList]);
 
   const createNewTemplate = () => {
     const newTemplate: Template = {
@@ -57,6 +71,14 @@ export function TemplateSettings() {
   const editTemplate = (template: Template) => {
     setEditingTemplate({ ...template });
     setIsEditing(true);
+  };
+
+  const handleStickerSelect = (sticker: Sticker) => {
+    setSelectedSticker(sticker);
+    setEditingTemplate({ 
+      ...editingTemplate!, 
+      sticker: sticker.name 
+    });
   };
 
   const saveTemplate = async () => {
@@ -308,14 +330,11 @@ export function TemplateSettings() {
               {/* Mode-specific settings */}
               {editingTemplate.mode === 'sticker' && (
                 <div>
-                  <Label htmlFor="sticker-name" className="text-gray-900">스티커 이름</Label>
-                  <Input
-                    id="sticker-name"
-                    type="text"
-                    value={editingTemplate.sticker || ''}
-                    onChange={(e) => setEditingTemplate({ ...editingTemplate, sticker: e.target.value })}
-                    placeholder="스티커 이름 입력"
-                    className="mt-1"
+                  <Label className="text-gray-900 mb-2 block">스티커 선택</Label>
+                  <StickerDialogButton
+                    selectedSticker={selectedSticker}
+                    onStickerSelect={handleStickerSelect}
+                    placeholder="스티커를 선택해주세요"
                   />
                 </div>
               )}

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Settings, History, Shield, Target } from 'lucide-react';
+import { Home, Settings, History, Shield, Target, Users } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +14,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/templates', label: '템플릿 설정', icon: Settings },
     { path: '/roulette-history', label: '룰렛 기록', icon: History },
     { path: '/fanscore-settings', label: '애청지수 설정', icon: Target },
+    { path: '/user-management', label: '청취자 관리', icon: Users },
     { path: '/shield-settings', label: '실드 설정', icon: Shield },
   ];
 

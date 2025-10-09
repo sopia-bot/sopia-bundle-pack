@@ -1,7 +1,7 @@
 import express from 'express';
 import logger from '../utils/logger';
 import { getDataFile, saveDataFile } from '../utils/fileManager';
-
+const { BrowserWindow } = require('electron');
 const router = express.Router();
 
 // 설정 조회
@@ -21,7 +21,7 @@ router.get('/', (req, res) => {
 });
 
 // 설정 저장
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const config = req.body;
     logger.debug('Saving fanscore config', { 
@@ -38,6 +38,23 @@ router.post('/', (req, res) => {
       quizEnabled: config.quiz_enabled,
       lotteryEnabled: config.lottery_enabled
     });
+
+    // Worker에 설정 업데이트 알림
+    try {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (window) {
+        window.webContents.send('starter-pack.sopia.dev', {
+          channel: 'config-updated',
+          data: 'config-updated'
+        });
+        logger.debug('Worker notified of config update');
+      }
+    } catch (notifyError: any) {
+      logger.warn('Failed to notify worker of config update', {
+        error: notifyError?.message || 'Unknown error'
+      });
+      // 워커 알림 실패해도 설정 저장은 성공으로 처리
+    }
     
     res.json(config);
   } catch (error: any) {

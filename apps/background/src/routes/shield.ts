@@ -26,17 +26,9 @@ router.put('/change', (req, res) => {
     
     const data = getDataFile('shield');
     
-    const newCount = data.shield_count + change;
-    if (newCount < 0) {
-      logger.warn('Shield change failed: negative count', {
-        currentCount: data.shield_count,
-        change,
-        newCount
-      });
-      return res.status(400).json({ error: 'Shield count cannot be negative' });
-    }
-    
     const oldCount = data.shield_count;
+    const newCount = data.shield_count + change;
+    
     data.shield_count = newCount;
     data.history.push({
       change,

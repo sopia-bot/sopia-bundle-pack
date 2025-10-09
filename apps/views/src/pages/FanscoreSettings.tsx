@@ -12,13 +12,16 @@ import { toast } from 'sonner';
 
 interface FanscoreConfig {
   enabled: boolean;
+  attendance_score: number;
   chat_score: number;
   like_score: number;
   spoon_score: number;
   quiz_enabled: boolean;
   quiz_bonus: number;
+  quiz_interval: number;
+  quiz_timeout: number;
   lottery_enabled: boolean;
-  lottery_percentage: number;
+  lottery_spoon_required: number;
 }
 
 interface Quiz {
@@ -32,13 +35,16 @@ interface Quiz {
 export function FanscoreSettings() {
   const [config, setConfig] = useState<FanscoreConfig>({
     enabled: true,
+    attendance_score: 10,
     chat_score: 1,
-    like_score: 2,
-    spoon_score: 50,
+    like_score: 10,
+    spoon_score: 100,
     quiz_enabled: false,
     quiz_bonus: 10,
+    quiz_interval: 180,
+    quiz_timeout: 5,
     lottery_enabled: false,
-    lottery_percentage: 0.1,
+    lottery_spoon_required: 50,
   });
 
   const [saved, setSaved] = useState(false);
@@ -77,13 +83,58 @@ export function FanscoreSettings() {
   };
 
   const saveConfig = async () => {
+    // 유효성 검사
+    const validatedConfig = { ...config };
+    
+    // 숫자 필드 검증 및 기본값 설정
+    if (isNaN(validatedConfig.attendance_score) || validatedConfig.attendance_score < 0) {
+      validatedConfig.attendance_score = 10;
+      toast.warning('출석 점수가 유효하지 않아 기본값(10)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.chat_score) || validatedConfig.chat_score < 0) {
+      validatedConfig.chat_score = 1;
+      toast.warning('채팅 점수가 유효하지 않아 기본값(1)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.like_score) || validatedConfig.like_score < 0) {
+      validatedConfig.like_score = 10;
+      toast.warning('좋아요 점수가 유효하지 않아 기본값(10)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.spoon_score) || validatedConfig.spoon_score < 0) {
+      validatedConfig.spoon_score = 100;
+      toast.warning('스푼 점수가 유효하지 않아 기본값(100)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.quiz_bonus) || validatedConfig.quiz_bonus < 0) {
+      validatedConfig.quiz_bonus = 10;
+      toast.warning('퀴즈 보너스가 유효하지 않아 기본값(10)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.quiz_interval) || validatedConfig.quiz_interval < 30) {
+      validatedConfig.quiz_interval = 180;
+      toast.warning('퀴즈 간격이 유효하지 않아 기본값(180초)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.quiz_timeout) || validatedConfig.quiz_timeout < 1) {
+      validatedConfig.quiz_timeout = 5;
+      toast.warning('퀴즈 입력 시간이 유효하지 않아 기본값(5초)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.lottery_spoon_required) || validatedConfig.lottery_spoon_required < 1) {
+      validatedConfig.lottery_spoon_required = 50;
+      toast.warning('복권 스푼 개수가 유효하지 않아 기본값(50)으로 설정되었습니다.');
+    }
+    
     try {
       await fetch('stp://starter-pack.sopia.dev/fanscore/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify(validatedConfig),
       });
 
+      setConfig(validatedConfig);
       setSaved(true);
       toast.success('설정이 저장되었습니다.');
       setTimeout(() => setSaved(false), 3000);
@@ -233,6 +284,23 @@ export function FanscoreSettings() {
             <CardDescription className="text-gray-600">각 활동별 점수를 설정하여 애청지수를 계산합니다</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Attendance Score */}
+            <div className="space-y-3">
+              <Label htmlFor="attendance-score" className="text-base font-medium text-gray-900">출석 점수</Label>
+              <div className="flex items-center gap-4">
+                <Input
+                  id="attendance-score"
+                  type="number"
+                  value={config.attendance_score}
+                  onChange={(e) => setConfig({ ...config, attendance_score: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                  disabled={!config.enabled}
+                  className="flex-1"
+                />
+                <span className="text-gray-500 text-sm font-medium">점</span>
+              </div>
+              <p className="text-gray-500 text-sm">청취자가 방송에 입장할 때 부여되는 출석 점수</p>
+            </div>
+
             {/* Chat Score */}
             <div className="space-y-3">
               <Label htmlFor="chat-score" className="text-base font-medium text-gray-900">채팅 1회당 점수</Label>
@@ -240,10 +308,8 @@ export function FanscoreSettings() {
                 <Input
                   id="chat-score"
                   type="number"
-                  min="0"
-                  step="0.1"
                   value={config.chat_score}
-                  onChange={(e) => setConfig({ ...config, chat_score: parseFloat(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, chat_score: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
                   disabled={!config.enabled}
                   className="flex-1"
                 />
@@ -259,10 +325,8 @@ export function FanscoreSettings() {
                 <Input
                   id="like-score"
                   type="number"
-                  min="0"
-                  step="0.1"
                   value={config.like_score}
-                  onChange={(e) => setConfig({ ...config, like_score: parseFloat(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, like_score: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
                   disabled={!config.enabled}
                   className="flex-1"
                 />
@@ -278,10 +342,8 @@ export function FanscoreSettings() {
                 <Input
                   id="spoon-score"
                   type="number"
-                  min="0"
-                  step="1"
                   value={config.spoon_score}
-                  onChange={(e) => setConfig({ ...config, spoon_score: parseFloat(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, spoon_score: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
                   disabled={!config.enabled}
                   className="flex-1"
                 />
@@ -321,16 +383,46 @@ export function FanscoreSettings() {
                   <Input
                     id="quiz-bonus"
                     type="number"
-                    min="0"
-                    step="1"
                     value={config.quiz_bonus}
-                    onChange={(e) => setConfig({ ...config, quiz_bonus: parseFloat(e.target.value) })}
+                    onChange={(e) => setConfig({ ...config, quiz_bonus: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
                     disabled={!config.enabled}
                     className="flex-1"
                   />
                   <span className="text-gray-500 text-sm font-medium">점</span>
                 </div>
                 <p className="text-gray-500 text-sm">퀴즈 정답 시 추가로 부여되는 보너스 점수</p>
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="quiz-interval" className="text-base font-medium text-gray-900">퀴즈 실행 간격</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="quiz-interval"
+                    type="number"
+                    value={config.quiz_interval}
+                    onChange={(e) => setConfig({ ...config, quiz_interval: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                    disabled={!config.enabled}
+                    className="flex-1"
+                  />
+                  <span className="text-gray-500 text-sm font-medium">초</span>
+                </div>
+                <p className="text-gray-500 text-sm">돌발 퀴즈가 실행되는 간격 (최소 30초)</p>
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="quiz-timeout" className="text-base font-medium text-gray-900">퀴즈 정답 입력 시간</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="quiz-timeout"
+                    type="number"
+                    value={config.quiz_timeout}
+                    onChange={(e) => setConfig({ ...config, quiz_timeout: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                    disabled={!config.enabled}
+                    className="flex-1"
+                  />
+                  <span className="text-gray-500 text-sm font-medium">초</span>
+                </div>
+                <p className="text-gray-500 text-sm">퀴즈 문제 출제 후 정답을 입력할 수 있는 시간 (최소 1초)</p>
               </div>
 
               {/* 퀴즈 관리 */}
@@ -460,9 +552,20 @@ export function FanscoreSettings() {
           </CardHeader>
           {config.lottery_enabled && (
             <CardContent>
-              <div className="text-center py-4">
-                <p className="text-gray-600 text-sm">복권 시스템이 활성화되었습니다.</p>
-                <p className="text-gray-500 text-xs mt-1">각 활동마다 랜덤하게 보너스 점수가 부여됩니다.</p>
+              <div className="space-y-3">
+                <Label htmlFor="lottery-spoon" className="text-base font-medium text-gray-900">복권 지급 스푼 개수</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="lottery-spoon"
+                    type="number"
+                    value={config.lottery_spoon_required}
+                    onChange={(e) => setConfig({ ...config, lottery_spoon_required: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                    disabled={!config.enabled}
+                    className="flex-1"
+                  />
+                  <span className="text-gray-500 text-sm font-medium">스푼</span>
+                </div>
+                <p className="text-gray-500 text-sm">청취자가 이 개수만큼 스푼을 선물하면 복권이 1장 지급됩니다</p>
               </div>
             </CardContent>
           )}
