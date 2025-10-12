@@ -30,7 +30,10 @@ async function showRouletteList(
   const { socket } = context;
 
   try {
-    const templates = rouletteManager.getAllTemplates();
+    const templates = rouletteManager.getAllTemplates().map((t: RouletteTemplate, idx) => ({
+      ...t,
+      idx: idx + 1
+    }));
     const enabledTemplates = templates.filter((t: any) => t.enabled !== false);
 
     if (enabledTemplates.length === 0) {
@@ -39,9 +42,9 @@ async function showRouletteList(
     }
 
     const lines = ['[룰렛 목록]'];
-    enabledTemplates.forEach((template: RouletteTemplate, index: number) => {
+    enabledTemplates.forEach((template: RouletteTemplate) => {
       const description = getTemplateDescription(template);
-      lines.push(`${index + 1}. ${template.name} (${description})`);
+      lines.push(`${(template as any).idx}. ${template.name} (${description})`);
     });
 
     await socket.message(lines.join('\\n'));
@@ -56,6 +59,7 @@ async function showRouletteList(
  * !룰렛 [템플릿 번호] [횟수]
  * !룰렛 [템플릿 번호]
  * !룰렛 전체
+ * !룰렛 자동
  */
 export async function handleRouletteCommand(
   args: string[],
@@ -74,6 +78,12 @@ export async function handleRouletteCommand(
     // !룰렛 전체
     if (args[0] === '전체') {
       await handleRouletteAll(context, rouletteManager);
+      return;
+    }
+
+    // !룰렛 자동
+    if (args[0] === '자동') {
+      await handleRouletteAuto(context, rouletteManager);
       return;
     }
 
@@ -182,6 +192,72 @@ async function handleRouletteAll(
     }
   } catch (error: any) {
     console.error('[RouletteCommand] Error in handleRouletteAll:', error?.message);
+    await socket.message('룰렛 실행 중 오류가 발생했습니다.');
+  }
+}
+
+/**
+ * !룰렛 자동 - 모든 템플릿의 티켓을 사용하고 결과를 합산하여 표시
+ */
+async function handleRouletteAuto(
+  context: CommandContext,
+  rouletteManager: RouletteManager
+): Promise<void> {
+  const { socket, user } = context;
+
+  try {
+    const tickets = await rouletteManager.getUserTickets(user.id);
+    const templates = rouletteManager.getAllTemplates();
+
+    let totalSpins = 0;
+    // 합산된 결과를 저장할 Map (아이템 label을 키로 사용)
+    const combinedResults = new Map<string, number>();
+
+    for (const template of templates) {
+      const count = tickets[template.template_id] || 0;
+      if (count <= 0) continue;
+
+      const result = await rouletteManager.spinRoulette(
+        user.id,
+        user.nickname,
+        user.tag,
+        template.template_id,
+        count
+      );
+
+      if (result) {
+        totalSpins += result.totalSpins;
+        
+        // 각 결과를 합산
+        for (const [label, { count: itemCount }] of result.results.entries()) {
+          const currentCount = combinedResults.get(label) || 0;
+          combinedResults.set(label, currentCount + itemCount);
+        }
+      }
+    }
+
+    if (totalSpins === 0) {
+      await socket.message(`${user.nickname}님, 사용 가능한 티켓이 없습니다.`);
+      return;
+    }
+
+    // 합산된 결과 출력
+    const lines = [`[${user.nickname}님 룰렛 자동 실행 결과]`, `총 ${totalSpins}회 실행`, ''];
+
+    // 결과를 배열로 변환하여 정렬 (꽝은 마지막)
+    const sortedResults = Array.from(combinedResults.entries()).sort(([labelA], [labelB]) => {
+      if (labelA === '꽝') return 1;
+      if (labelB === '꽝') return -1;
+      return 0;
+    });
+
+    for (const [label, count] of sortedResults) {
+      lines.push(`- ${label} x${count}`);
+    }
+
+    await socket.message(lines.join('\\n'));
+  } catch (error: any) {
+    console.error('[RouletteCommand] Error in handleRouletteAuto:', error?.message);
     await socket.message('룰렛 실행 중 오류가 발생했습니다.');
   }
 }

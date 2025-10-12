@@ -3,13 +3,12 @@
   "name:ko": "소피아 통합 번들팩",
   "description": "this is descript",
 	"description:ko": "룰렛, 실드, 애청지수를 전부 통합하여 관리할 수 있습니다.",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "main": "./apps/worker/index.js",
-  "page": "http://localhost:4200",
-  "pageType": "http",
+  "page": "index.html",
   "pageRoot": "apps/views",
   "page-version": 2,
-  "debug": true,
+  "debug": false,
   "stp": {
     "domain": "starter-pack.sopia.dev",
     "file": "./apps/background/index.js"

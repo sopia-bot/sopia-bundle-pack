@@ -91,6 +91,25 @@ export async function handleViewProfile(
     }
     const levelInfo = calculateLevel(profile.exp);
 
+    // 룰렛 티켓 정보 가져오기
+    let rouletteTicketCount = 0;
+    try {
+      const ticketResponse = await fetch(`stp://${DOMAIN}/roulette/tickets/${user.id}`);
+      if (ticketResponse.ok) {
+        const ticketData = await ticketResponse.json();
+        // tickets 객체의 모든 값을 합산
+        if (ticketData.tickets) {
+          rouletteTicketCount = Object.values(ticketData.tickets).reduce(
+            (sum: number, count: any) => sum + (typeof count === 'number' ? count : 0),
+            0
+          );
+        }
+      }
+    } catch (error) {
+      console.error('[!내정보] Failed to fetch roulette tickets:', error);
+      // 룰렛 티켓 조회 실패 시에도 나머지 정보는 표시
+    }
+
     const message = 
       `📊 ${profile.nickname}님의 정보\\n\\n` +
       `🏆 순위: ${profile.rank}위\\n` +
@@ -99,6 +118,7 @@ export async function handleViewProfile(
       `💬 채팅: ${profile.chat_count}회\\n` +
       `❤️ 좋아요: ${profile.like_count}회\\n` +
       `🥄 스푼: ${profile.spoon_count}개\\n` +
+      `🎟️ 룰렛: ${rouletteTicketCount}장\\n` +
       `🎫 복권: ${profile.lottery_tickets}장`;
 
     await socket.message(message);

@@ -13,7 +13,6 @@ export class FanscoreManager {
   private config: FanscoreConfig | null = null;
   private batchInterval: NodeJS.Timeout | null = null;
   private currentLiveId: number = 0;
-  private uuid: string = crypto.randomUUID();
 
   constructor() {
     this.startBatchUpdate();
@@ -178,6 +177,43 @@ export class FanscoreManager {
   }
 
   /**
+   * 캐시된 사용자들의 rank 업데이트
+   */
+  private async updateUserRanksInCache() {
+    try {
+      const userIds = Array.from(this.userCache.keys());
+      
+      // 캐시에 사용자가 없으면 리턴
+      if (userIds.length === 0) return;
+
+      // 각 사용자의 최신 데이터를 가져와서 rank만 업데이트
+      for (const userId of userIds) {
+        try {
+          const response = await fetch(`stp://${DOMAIN}/fanscore/user/${userId}`);
+          if (response.ok) {
+            const updatedUser = await response.json();
+            const cachedUser = this.userCache.get(userId);
+            
+            if (cachedUser) {
+              // rank 값만 업데이트 (다른 값은 캐시 유지)
+              this.userCache.set(userId, {
+                ...cachedUser,
+                rank: updatedUser.rank
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`[FanscoreManager] Failed to update rank for user ${userId}:`, error);
+        }
+      }
+      
+      console.log(`[FanscoreManager] Updated ranks for ${userIds.length} cached users`);
+    } catch (error) {
+      console.error('[FanscoreManager] Failed to update user ranks in cache:', error);
+    }
+  }
+
+  /**
    * 배치 업데이트 처리
    */
   private async processBatchUpdate() {
@@ -252,6 +288,9 @@ export class FanscoreManager {
 
         if (response.ok) {
           console.log(`[FanscoreManager] Batch updated ${updates.length} users`);
+          
+          // 배치 업데이트 후 rank 업데이트를 위해 캐시된 사용자 데이터 다시 로드
+          await this.updateUserRanksInCache();
         } else {
           console.error('[FanscoreManager] Batch update failed');
         }

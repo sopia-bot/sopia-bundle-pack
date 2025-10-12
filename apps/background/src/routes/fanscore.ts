@@ -12,6 +12,39 @@ function getTodayStart(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+/**
+ * 순위 재정렬 함수
+ * 레벨 우선, 경험치 차순으로 정렬하여 rank 값 업데이트
+ */
+async function recalculateRanks(): Promise<void> {
+  try {
+    const data = await getDataFile('fanscore');
+    
+    // 레벨 우선, 경험치 차순으로 정렬
+    const sortedData = data.sort((a: any, b: any) => {
+      // 1. 레벨 비교 (높은 레벨이 우선)
+      if (b.level !== a.level) {
+        return b.level - a.level;
+      }
+      // 2. 레벨이 같으면 경험치 비교 (높은 경험치가 우선)
+      return b.exp - a.exp;
+    });
+    
+    // 랭킹 업데이트
+    sortedData.forEach((item: any, index: number) => {
+      item.rank = index + 1;
+    });
+    
+    await saveDataFile('fanscore', sortedData);
+    logger.debug('Ranks recalculated successfully', { totalUsers: sortedData.length });
+  } catch (error: any) {
+    logger.error('Failed to recalculate ranks', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined
+    });
+  }
+}
+
 // 애청지수 랭킹 조회
 router.get('/ranking', async (req, res) => {
   try {
@@ -252,7 +285,10 @@ router.post('/batch-update', async (req, res) => {
     
     await saveDataFile('fanscore', data);
     
-    logger.info('Batch update completed', { requested: updates.length, updated });
+    // 모든 업데이트 완료 후 순위 재정렬
+    await recalculateRanks();
+    
+    logger.info('Batch update completed with rank recalculation', { requested: updates.length, updated });
     res.json({ updated, total: updates.length });
   } catch (error: any) {
     logger.error('Failed to batch update fanscore', {

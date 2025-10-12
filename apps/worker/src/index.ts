@@ -264,6 +264,8 @@ async function processRouletteTicketGrant(
                         user.tag,
                         template.template_id
                     );
+                } else {
+                    await socket.message(`[룰렛]\n${user.nickname}님, 룰렛 티켓이 ${ticketCount}개 지급되었습니다.`);
                 }
             }
         }
@@ -347,6 +349,17 @@ function backgroundListener(event: any, data: { channel: string; data?: any }): 
             rouletteManager.loadTemplates().then(() => {
                 console.log('[Worker] Templates refreshed');
             });
+            break;
+        case 'send-chat-message':
+            // 채팅 메시지 전송 요청
+            if (data.data && data.data.message) {
+                const socket = (window as any).$sopia?.liveMap?.values().next().value?.socket as LiveSocket;
+                if (socket) {
+                    socket.message(data.data.message).catch((error: any) => {
+                        console.error('[Worker] Failed to send chat message:', error);
+                    });
+                }
+            }
             break;
     }
 }

@@ -2,7 +2,28 @@ import express from 'express';
 import logger from '../utils/logger';
 import { getDataFile, saveDataFile } from '../utils/fileManager';
 
+const { BrowserWindow } = require('electron');
 const router = express.Router();
+
+/**
+ * Worker에 채팅 메시지 전송 요청
+ */
+function sendChatMessage(message: string) {
+  try {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window) {
+      window.webContents.send('starter-pack.sopia.dev', {
+        channel: 'send-chat-message',
+        data: { message }
+      });
+      logger.debug('Chat message sent to worker', { message });
+    }
+  } catch (error: any) {
+    logger.warn('Failed to send chat message to worker', {
+      error: error?.message || 'Unknown error'
+    });
+  }
+}
 
 // ==================== 티켓 관리 API ====================
 
@@ -33,7 +54,7 @@ router.get('/tickets/:userId', async (req, res) => {
 router.post('/tickets/:userId/add', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { templateId, count, nickname, tag } = req.body;
+    const { templateId, count, nickname, tag, sendNotification, templateName } = req.body;
     
     logger.debug('Adding tickets to user', { userId, templateId, count });
     
@@ -69,6 +90,12 @@ router.post('/tickets/:userId/add', async (req, res) => {
       count,
       newTotal: userTickets.tickets[templateId]
     });
+    
+    // 채팅 알림 전송 (요청 시)
+    if (sendNotification && nickname && templateName) {
+      const message = `🎫 ${nickname}님에게 "${templateName}" 룰렛 티켓 ${count}장이 지급되었습니다!`;
+      sendChatMessage(message);
+    }
     
     res.json(userTickets);
   } catch (error: any) {

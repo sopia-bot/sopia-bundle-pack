@@ -1,3 +1,4 @@
+import { User } from '@sopia-bot/core';
 import { FanscoreUser } from '../types/fanscore';
 import { FanscoreManager } from './fanscore-manager';
 
@@ -107,7 +108,11 @@ export class LotteryManager {
 
       // 경험치 지급 (배치 업데이트 시스템 사용)
       if (reward > 0) {
-        this.fanscoreManager.addExpDirect(userId, reward);
+        this.fanscoreManager.addExpDirect({
+          id: userId,
+          nickname: user.nickname,
+          tag: user.tag,
+        } as User, reward);
       }
 
       return {
@@ -187,7 +192,11 @@ export class LotteryManager {
 
       // 경험치 지급 (배치 업데이트 시스템 사용)
       if (totalReward > 0) {
-        this.fanscoreManager.addExpDirect(userId, totalReward);
+        this.fanscoreManager.addExpDirect({
+          id: userId,
+          nickname: user.nickname,
+          tag: user.tag,
+        } as User, totalReward);
       }
 
       const breakdown = [

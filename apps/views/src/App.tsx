@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route, HashRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { Dashboard } from './pages/Dashboard';
 import { TemplateSettings } from './pages/TemplateSettings';
@@ -10,7 +10,7 @@ import { StickerTest } from './pages/StickerTest';
 
 function App() {
   return (
-    <Router>
+    <HashRouter>
       <div className="min-h-screen bg-gray-50 text-gray-900">
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -23,7 +23,7 @@ function App() {
         </Routes>
         <Toaster position="top-right" richColors />
       </div>
-    </Router>
+    </HashRouter>
   );
 }
 
