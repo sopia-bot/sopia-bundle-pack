@@ -1,6 +1,7 @@
 import { LiveSocket, User } from '@sopia-bot/core';
 import { FanscoreUser } from '../types/fanscore';
 import { calculateLevel } from '../utils/level-system';
+import { FanscoreManager } from '../managers/fanscore-manager';
 
 const DOMAIN = 'starter-pack.sopia.dev';
 
@@ -9,7 +10,7 @@ const DOMAIN = 'starter-pack.sopia.dev';
  */
 export async function handleCreateProfile(
   args: string[],
-  context: { user: User; socket: LiveSocket }
+  context: { user: User; socket: LiveSocket },
 ): Promise<void> {
   const { user, socket } = context;
 
@@ -77,23 +78,17 @@ export async function handleDeleteProfile(
  */
 export async function handleViewProfile(
   args: string[],
-  context: { user: User; socket: LiveSocket }
+  context: { user: User; socket: LiveSocket },
+  fanscoreManager: FanscoreManager
 ): Promise<void> {
   const { user, socket } = context;
 
   try {
-    const response = await fetch(`stp://${DOMAIN}/fanscore/user/${user.id}`);
-    
-    if (response.status === 404) {
+    const profile: FanscoreUser|null = await fanscoreManager.loadUser(user.id);
+    if ( profile === null ) {
       await socket.message('⚠️ 등록되지 않은 사용자입니다. "!내정보 생성"으로 등록해주세요.');
       return;
     }
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch profile');
-    }
-
-    const profile: FanscoreUser = await response.json();
     const levelInfo = calculateLevel(profile.exp);
 
     const message = 
@@ -119,7 +114,8 @@ export async function handleViewProfile(
  */
 export async function handleAddScore(
   args: string[],
-  context: { user: User; socket: LiveSocket; isAdmin: boolean }
+  context: { user: User; socket: LiveSocket; isAdmin: boolean },
+  fanscoreManager: FanscoreManager
 ): Promise<void> {
   const { user, socket, isAdmin } = context;
 
@@ -152,27 +148,22 @@ export async function handleAddScore(
 
     const targetUser: FanscoreUser = await userResponse.json();
 
-    // 점수 추가
-    const newExp = targetUser.exp + scoreToAdd;
-    const newScore = targetUser.score + scoreToAdd;
-    const levelInfo = calculateLevel(newExp);
-
-    const updateResponse = await fetch(`stp://${DOMAIN}/fanscore/user/${targetUser.user_id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        exp: newExp,
-        score: newScore,
-        level: levelInfo.level
-      })
-    });
-
-    if (updateResponse.ok) {
-      await socket.message(`✅ ${targetUser.nickname}님에게 ${scoreToAdd}점을 부여했습니다. (총 ${newScore}점)`);
-      console.log(`[!상점] ${user.nickname} gave ${scoreToAdd} points to ${targetUser.nickname}`);
-    } else {
-      throw new Error('Failed to update score');
+    const userData = {
+      id: targetUser.user_id,
+      nickname: targetUser.nickname,
+      tag: targetUser.tag,
     }
+    // FanscoreManager를 통해 배치 업데이트에 추가
+    // 사용자 등록 여부 확인
+    const isRegistered = await fanscoreManager.isUserRegistered(targetUser.user_id);
+    if (!isRegistered) {
+      await socket.message(`⚠️ "${targetTag}" 사용자가 등록되어 있지 않습니다.`);
+      return;
+    }
+    fanscoreManager.addExpDirect(userData as User, scoreToAdd);
+
+    await socket.message(`✅ ${targetUser.nickname}님에게 ${scoreToAdd}점을 부여했습니다.`);
+    console.log(`[!상점] ${user.nickname} gave ${scoreToAdd} points to ${targetUser.nickname}`);
   } catch (error) {
     console.error('[!상점] Error:', error);
     await socket.message('❌ 점수 부여에 실패했습니다.');
@@ -184,7 +175,8 @@ export async function handleAddScore(
  */
 export async function handleSubtractScore(
   args: string[],
-  context: { user: User; socket: LiveSocket; isAdmin: boolean }
+  context: { user: User; socket: LiveSocket; isAdmin: boolean },
+  fanscoreManager: FanscoreManager
 ): Promise<void> {
   const { user, socket, isAdmin } = context;
 
@@ -217,27 +209,22 @@ export async function handleSubtractScore(
 
     const targetUser: FanscoreUser = await userResponse.json();
 
-    // 점수 감소
-    const newExp = Math.max(0, targetUser.exp - scoreToSubtract);
-    const newScore = Math.max(0, targetUser.score - scoreToSubtract);
-    const levelInfo = calculateLevel(newExp);
-
-    const updateResponse = await fetch(`stp://${DOMAIN}/fanscore/user/${targetUser.user_id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        exp: newExp,
-        score: newScore,
-        level: levelInfo.level
-      })
-    });
-
-    if (updateResponse.ok) {
-      await socket.message(`✅ ${targetUser.nickname}님의 점수를 ${scoreToSubtract}점 감소했습니다. (총 ${newScore}점)`);
-      console.log(`[!감점] ${user.nickname} subtracted ${scoreToSubtract} points from ${targetUser.nickname}`);
-    } else {
-      throw new Error('Failed to update score');
+    const userData = {
+      id: targetUser.user_id,
+      nickname: targetUser.nickname,
+      tag: targetUser.tag,
     }
+    // FanscoreManager를 통해 배치 업데이트에 추가 (음수로 차감)
+    // 사용자 등록 여부 확인
+    const isRegistered = await fanscoreManager.isUserRegistered(targetUser.user_id);
+    if (!isRegistered) {
+      await socket.message(`⚠️ "${targetTag}" 사용자가 등록되어 있지 않습니다.`);
+      return;
+    }
+    fanscoreManager.addExpDirect(userData as User, -scoreToSubtract);
+
+    await socket.message(`✅ ${targetUser.nickname}님의 점수를 ${scoreToSubtract}점 감소했습니다.`);
+    console.log(`[!감점] ${user.nickname} subtracted ${scoreToSubtract} points from ${targetUser.nickname}`);
   } catch (error) {
     console.error('[!감점] Error:', error);
     await socket.message('❌ 점수 감소에 실패했습니다.');

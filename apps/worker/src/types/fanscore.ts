@@ -15,6 +15,7 @@ export interface FanscoreUser {
   spoon_count: number;
   lottery_tickets: number;
   attendance_live_id: number | null;
+  last_activity_at?: string; // ISO 8601 timestamp
 }
 
 export interface FanscoreConfig {
@@ -41,9 +42,12 @@ export interface Quiz {
 
 export interface PendingUpdate {
   user_id: number;
+  nickname?: string;
+  tag?: string;
   attendance?: number;
   chat?: number;
   like?: number;
   spoon?: number;
+  expDirect?: number; // 복권, 퀴즈 등 직접 경험치
 }
 

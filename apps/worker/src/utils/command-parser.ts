@@ -34,9 +34,19 @@ export function parseCommand(message: string): ParsedCommand | null {
 }
 
 /**
+ * 명령어 컨텍스트 타입
+ */
+export interface CommandContext {
+  user: any;
+  socket: any;
+  isAdmin: boolean;
+  liveId?: number;
+}
+
+/**
  * 명령어 핸들러 타입
  */
-export type CommandHandler = (args: string[], context: any) => Promise<void>;
+export type CommandHandler = (args: string[], context: CommandContext) => Promise<void>;
 
 /**
  * 명령어 레지스트리
@@ -60,7 +70,7 @@ export class CommandRegistry {
    * @param context 컨텍스트
    * @returns 핸들러가 실행되었는지 여부
    */
-  async execute(command: string, args: string[], context: any): Promise<boolean> {
+  async execute(command: string, args: string[], context: CommandContext): Promise<boolean> {
     const handler = this.handlers.get(command.toLowerCase());
     if (!handler) {
       return false;

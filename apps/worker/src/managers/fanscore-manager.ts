@@ -1,6 +1,6 @@
 import { FanscoreUser, FanscoreConfig, PendingUpdate } from '../types/fanscore';
 import { calculateLevel, checkLevelUp } from '../utils/level-system';
-import { LiveSocket } from '@sopia-bot/core';
+import { LiveSocket, User } from '@sopia-bot/core';
 
 const DOMAIN = 'starter-pack.sopia.dev';
 
@@ -13,6 +13,7 @@ export class FanscoreManager {
   private config: FanscoreConfig | null = null;
   private batchInterval: NodeJS.Timeout | null = null;
   private currentLiveId: number = 0;
+  private uuid: string = crypto.randomUUID();
 
   constructor() {
     this.startBatchUpdate();
@@ -53,7 +54,6 @@ export class FanscoreManager {
    */
   setLiveId(liveId: number) {
     this.currentLiveId = liveId;
-    console.log(`[FanscoreManager] Live ID set to ${liveId}`);
   }
 
   /**
@@ -61,6 +61,9 @@ export class FanscoreManager {
    */
   async loadUser(userId: number): Promise<FanscoreUser | null> {
     try {
+      if ( this.userCache.has(userId) ) {
+        return this.userCache.get(userId)!;
+      }
       const response = await fetch(`stp://${DOMAIN}/fanscore/user/${userId}`);
       if (!response.ok) {
         return null;
@@ -85,29 +88,34 @@ export class FanscoreManager {
   /**
    * 출석 체크 (채팅 시 자동)
    */
-  async checkAttendance(userId: number): Promise<boolean> {
-    console.log('this.config?.enabled', this.config?.enabled);
+  async checkAttendance(user: User): Promise<boolean> {
+    const userId = user.id;
     if (!this.config?.enabled) return false;
 
-    const user = this.userCache.get(userId);
-    console.log('user', user);
-    if (!user) return false;
+    const userData = this.userCache.get(userId);
+    if (!userData) return false;
+
+    if ( this.currentLiveId === 0 ) return false;
 
     // 이미 출석했는지 확인
-    if (user.attendance_live_id === this.currentLiveId) {
-      console.log('이미 출석했습니다.');
+    if (userData.attendance_live_id === this.currentLiveId) {
       return false;
     }
 
     // 출석 점수 추가
     const pending = this.pendingUpdates.get(userId) || { user_id: userId };
-    console.log('pending', pending);
     pending.attendance = this.config.attendance_score;
+    pending.nickname = user.nickname;
+    pending.tag = user.tag;
     this.pendingUpdates.set(userId, pending);
 
     // 캐시 업데이트
-    user.attendance_live_id = this.currentLiveId;
-    this.userCache.set(userId, user);
+    this.userCache.set(userId, {
+      ...userData,
+      attendance_live_id: this.currentLiveId,
+      nickname: user.nickname,
+      tag: user.tag
+    });
 
     console.log(`[FanscoreManager] Attendance checked for user ${userId} (Live: ${this.currentLiveId})`);
     return true;
@@ -116,33 +124,56 @@ export class FanscoreManager {
   /**
    * 채팅 점수 추가
    */
-  addChatScore(userId: number) {
+  addChatScore(user: User) {
     if (!this.config?.enabled) return;
+    const userId = user.id;
 
     const pending = this.pendingUpdates.get(userId) || { user_id: userId };
     pending.chat = (pending.chat || 0) + this.config.chat_score;
+    pending.nickname = user.nickname;
+    pending.tag = user.tag;
     this.pendingUpdates.set(userId, pending);
   }
 
   /**
    * 좋아요 점수 추가
    */
-  addLikeScore(userId: number) {
+  addLikeScore(user: User) {
     if (!this.config?.enabled) return;
+    const userId = user.id;
 
     const pending = this.pendingUpdates.get(userId) || { user_id: userId };
     pending.like = (pending.like || 0) + this.config.like_score;
+    pending.nickname = user.nickname;
+    pending.tag = user.tag;
     this.pendingUpdates.set(userId, pending);
   }
 
   /**
    * 스푼 점수 추가
    */
-  addSpoonScore(userId: number, totalAmount: number) {
+  addSpoonScore(user: User, totalAmount: number) {
     if (!this.config?.enabled) return;
+    const userId = user.id;
 
     const pending = this.pendingUpdates.get(userId) || { user_id: userId };
     pending.spoon = (pending.spoon || 0) + (totalAmount * this.config.spoon_score);
+    pending.nickname = user.nickname;
+    pending.tag = user.tag;
+    this.pendingUpdates.set(userId, pending);
+  }
+
+  /**
+   * 경험치 직접 추가 (복권, 퀴즈 등)
+   */
+  addExpDirect(user: User, exp: number) {
+    if (!this.config?.enabled) return;
+    const userId = user.id;
+
+    const pending = this.pendingUpdates.get(userId) || { user_id: userId };
+    pending.expDirect = (pending.expDirect || 0) + exp;
+    pending.nickname = user.nickname;
+    pending.tag = user.tag;
     this.pendingUpdates.set(userId, pending);
   }
 
@@ -161,8 +192,9 @@ export class FanscoreManager {
 
         // 점수 계산
         const addedScore = (pending.attendance || 0) + (pending.chat || 0) + (pending.like || 0) + (pending.spoon || 0);
-        const newExp = user.exp + addedScore;
-        const newScore = user.score + addedScore;
+        const addedExpDirect = pending.expDirect || 0; // 복권, 퀴즈, 상점, 감점 등 직접 경험치
+        const newExp = Math.max(0, user.exp + addedScore + addedExpDirect); // 음수 방지
+        const newScore = Math.max(0, user.score + addedScore + addedExpDirect); // 음수 방지
 
         // 레벨 계산
         const levelInfo = calculateLevel(newExp);
@@ -181,7 +213,10 @@ export class FanscoreManager {
           chat_count: newChatCount,
           like_count: newLikeCount,
           spoon_count: newSpoonCount,
-          attendance_live_id: user.attendance_live_id
+          attendance_live_id: user.attendance_live_id,
+          nickname: pending.nickname || '',
+          tag: pending.tag || '',
+          last_activity_at: new Date().toISOString(), // 활동 시각 업데이트
         };
 
         updates.push(update);
@@ -242,7 +277,11 @@ export class FanscoreManager {
 
       if (response.ok) {
         const user = await response.json();
-        this.userCache.set(userId, user);
+        this.userCache.set(userId, {
+          ...user,
+          ...this.userCache.get(userId),
+          lottery_tickets: user.lottery_tickets
+        });
         console.log(`[FanscoreManager] Lottery tickets given to user ${userId}: +${count} (${reason})`);
       }
     } catch (error) {

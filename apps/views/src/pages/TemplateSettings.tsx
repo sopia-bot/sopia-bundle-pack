@@ -17,6 +17,7 @@ interface TemplateItem {
   type: 'shield' | 'ticket' | 'custom';
   label: string;
   percentage: number;
+  value?: number; // 실드/복권의 증감값
 }
 
 interface Template {
@@ -27,7 +28,7 @@ interface Template {
   spoon?: number;
   division: boolean;
   auto_run: boolean;
-  sound_below_1percent: boolean;
+  enabled: boolean;
   items: TemplateItem[];
 }
 
@@ -61,7 +62,7 @@ export function TemplateSettings() {
       spoon: 1,
       division: false,
       auto_run: false,
-      sound_below_1percent: true,
+      enabled: true,
       items: [],
     };
     setEditingTemplate(newTemplate);
@@ -91,6 +92,12 @@ export function TemplateSettings() {
       return;
     }
 
+    // 좋아요 모드는 항상 auto_run을 true로 설정
+    const templateToSave = {
+      ...editingTemplate,
+      auto_run: editingTemplate.mode === 'like' ? true : editingTemplate.auto_run
+    };
+
     const isNew = !templates.find(t => t.template_id === editingTemplate.template_id);
     const method = isNew ? 'POST' : 'PUT';
     const url = isNew 
@@ -103,7 +110,7 @@ export function TemplateSettings() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editingTemplate),
+        body: JSON.stringify(templateToSave),
       });
 
       if (response.ok) {
@@ -189,12 +196,17 @@ export function TemplateSettings() {
         {/* Template List */}
         {!isEditing && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {templates.map((template) => (
+            {templates.map((template, index) => (
               <Card key={template.template_id} className="border shadow-lg">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-xl font-bold text-gray-900 mb-1">{template.name}</CardTitle>
+                      <CardTitle className="text-xl font-bold text-gray-900 mb-1">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-sm font-semibold">#{index + 1}</span>
+                          {template.name}
+                        </span>
+                      </CardTitle>
                       <CardDescription className="text-gray-600">
                         {template.mode === 'sticker' && `스티커: ${template.sticker}`}
                         {template.mode === 'spoon' && `스푼: ${template.spoon}개`}
@@ -243,10 +255,6 @@ export function TemplateSettings() {
                       <span className="text-gray-600">자동 실행:</span>
                       <span className="text-gray-900">{template.auto_run ? '활성화' : '비활성화'}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600">1% 효과음:</span>
-                      <span className="text-gray-900">{template.sound_below_1percent ? '활성화' : '비활성화'}</span>
-                    </div>
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-gray-200">
@@ -271,7 +279,19 @@ export function TemplateSettings() {
           <Card className="border shadow-lg">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-2xl font-bold text-gray-900">템플릿 편집</CardTitle>
+                <CardTitle className="text-2xl font-bold text-gray-900">
+                  <span className="inline-flex items-center gap-2">
+                    {(() => {
+                      const index = templates.findIndex(t => t.template_id === editingTemplate.template_id);
+                      return index >= 0 ? (
+                        <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-lg font-semibold">#{index + 1}</span>
+                      ) : (
+                        <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-lg font-semibold">NEW</span>
+                      );
+                    })()}
+                    템플릿 편집
+                  </span>
+                </CardTitle>
                 <div className="flex gap-2">
                   <Button
                     onClick={saveTemplate}
@@ -314,7 +334,14 @@ export function TemplateSettings() {
                 <Label htmlFor="template-mode" className="text-gray-900">룰렛 방식</Label>
                 <Select
                   value={editingTemplate.mode}
-                  onValueChange={(value) => setEditingTemplate({ ...editingTemplate, mode: value as any })}
+                  onValueChange={(value) => {
+                    // 좋아요 모드는 항상 auto_run을 true로 설정
+                    setEditingTemplate({ 
+                      ...editingTemplate, 
+                      mode: value as any,
+                      auto_run: value === 'like' ? true : editingTemplate.auto_run
+                    });
+                  }}
                 >
                   <SelectTrigger className="w-full mt-1">
                     <SelectValue placeholder="룰렛 방식을 선택하세요" />
@@ -367,20 +394,26 @@ export function TemplateSettings() {
 
               <div className="flex items-center space-x-2">
                 <Switch
-                  id="auto-run"
-                  checked={editingTemplate.auto_run}
-                  onCheckedChange={(checked) => setEditingTemplate({ ...editingTemplate, auto_run: checked })}
+                  id="enabled"
+                  checked={editingTemplate.enabled}
+                  onCheckedChange={(checked) => setEditingTemplate({ ...editingTemplate, enabled: checked })}
                 />
-                <Label htmlFor="auto-run" className="text-gray-900">자동 실행</Label>
+                <Label htmlFor="enabled" className="text-gray-900">룰렛 활성화</Label>
               </div>
 
               <div className="flex items-center space-x-2">
                 <Switch
-                  id="sound-effect"
-                  checked={editingTemplate.sound_below_1percent}
-                  onCheckedChange={(checked) => setEditingTemplate({ ...editingTemplate, sound_below_1percent: checked })}
+                  id="auto-run"
+                  checked={editingTemplate.auto_run}
+                  onCheckedChange={(checked) => setEditingTemplate({ ...editingTemplate, auto_run: checked })}
+                  disabled={editingTemplate.mode === 'like'}
                 />
-                <Label htmlFor="sound-effect" className="text-gray-900">1% 미만 효과음 재생</Label>
+                <Label htmlFor="auto-run" className={`${editingTemplate.mode === 'like' ? 'text-gray-400' : 'text-gray-900'}`}>
+                  자동 실행
+                  {editingTemplate.mode === 'like' && (
+                    <span className="text-xs text-gray-400 ml-2">(좋아요 모드는 항상 자동 실행)</span>
+                  )}
+                </Label>
               </div>
 
               {/* Items */}
@@ -402,46 +435,120 @@ export function TemplateSettings() {
                 <div className="space-y-3">
                   {editingTemplate.items.map((item, index) => (
                     <div key={index} className="flex gap-3 items-start p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1 grid grid-cols-3 gap-3">
-                        <div>
-                          <Label className="text-gray-900 text-xs">타입</Label>
-                          <Select
-                            value={item.type}
-                            onValueChange={(value) => updateItem(index, 'type', value)}
-                          >
-                            <SelectTrigger className="w-full mt-1">
-                              <SelectValue placeholder="타입을 선택하세요" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="shield">실드</SelectItem>
-                              <SelectItem value="ticket">복권</SelectItem>
-                              <SelectItem value="custom">커스텀</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      <div className="flex-1 space-y-3">
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-gray-900 text-xs">타입</Label>
+                            <Select
+                              value={item.type}
+                              onValueChange={(value) => {
+                                // 타입과 기본값을 한 번에 업데이트
+                                const updatedItems = [...editingTemplate.items];
+                                if (value === 'shield' || value === 'ticket') {
+                                  const defaultValue = 1;
+                                  const sign = '+';
+                                  const label = value === 'shield' 
+                                    ? `실드 ${sign}${defaultValue}`
+                                    : `복권 ${defaultValue}장`;
+                                  
+                                  updatedItems[index] = { 
+                                    ...updatedItems[index], 
+                                    type: value as 'shield' | 'ticket' | 'custom',
+                                    value: defaultValue,
+                                    label: label
+                                  };
+                                } else {
+                                  updatedItems[index] = { 
+                                    ...updatedItems[index], 
+                                    type: value as 'shield' | 'ticket' | 'custom'
+                                  };
+                                }
+                                setEditingTemplate({ ...editingTemplate, items: updatedItems });
+                              }}
+                            >
+                              <SelectTrigger className="w-full mt-1">
+                                <SelectValue placeholder="타입을 선택하세요" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="shield">실드</SelectItem>
+                                <SelectItem value="ticket">복권</SelectItem>
+                                <SelectItem value="custom">커스텀</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {/* 실드/복권은 증감값, 커스텀은 라벨 */}
+                          {item.type === 'shield' || item.type === 'ticket' ? (
+                            <div>
+                              <Label className="text-gray-900 text-xs">증감값</Label>
+                              <Input
+                                type="number"
+                                value={item.value !== undefined ? item.value : ''}
+                                onChange={(e) => {
+                                  // 빈 값 허용, 입력된 값 그대로 저장
+                                  const inputValue = e.target.value;
+                                  const val = inputValue === '' ? '' as any : parseInt(inputValue);
+                                  
+                                  // 라벨 생성 (빈 값이면 기본 텍스트)
+                                  let label = '';
+                                  if (val === '') {
+                                    label = item.type === 'shield' ? '실드' : '복권';
+                                  } else {
+                                    const numVal = typeof val === 'number' ? val : 0;
+                                    const sign = numVal >= 0 ? '+' : '';
+                                    label = item.type === 'shield' 
+                                      ? `실드 ${sign}${numVal}`
+                                      : `복권 ${numVal}장`;
+                                  }
+                                  
+                                  // value와 label 동시 업데이트
+                                  const updatedItems = [...editingTemplate.items];
+                                  updatedItems[index] = { 
+                                    ...updatedItems[index], 
+                                    value: val,
+                                    label: label
+                                  };
+                                  setEditingTemplate({ ...editingTemplate, items: updatedItems });
+                                }}
+                                placeholder="숫자 입력 (음수 가능)"
+                                className="mt-1"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <Label className="text-gray-900 text-xs">라벨</Label>
+                              <Input
+                                type="text"
+                                value={item.label}
+                                onChange={(e) => updateItem(index, 'label', e.target.value)}
+                                placeholder="아이템 이름"
+                                className="mt-1"
+                              />
+                            </div>
+                          )}
+                          
+                          <div>
+                            <Label className="text-gray-900 text-xs">확률 (%)</Label>
+                            <Input
+                              type="number"
+                              min="0.001"
+                              max="100"
+                              step="0.001"
+                              value={item.percentage}
+                              onChange={(e) => updateItem(index, 'percentage', parseFloat(e.target.value))}
+                              className="mt-1"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <Label className="text-gray-900 text-xs">라벨</Label>
-                          <Input
-                            type="text"
-                            value={item.label}
-                            onChange={(e) => updateItem(index, 'label', e.target.value)}
-                            placeholder="아이템 이름"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-gray-900 text-xs">확률 (%)</Label>
-                          <Input
-                            type="number"
-                            min="0.001"
-                            max="100"
-                            step="0.001"
-                            value={item.percentage}
-                            onChange={(e) => updateItem(index, 'percentage', parseFloat(e.target.value))}
-                            className="mt-1"
-                          />
-                        </div>
+                        
+                        {/* 타입 설명 */}
+                        <p className="text-xs text-gray-500">
+                          {item.type === 'shield' && '💡 남아있는 실드의 개수를 증감할 수 있습니다.'}
+                          {item.type === 'ticket' && '💡 당첨된 사람에게 복권을 지급합니다.'}
+                          {item.type === 'custom' && '💡 원하는 당첨 항목을 입력합니다.'}
+                        </p>
                       </div>
+                      
                       <Button
                         variant="outline"
                         size="sm"

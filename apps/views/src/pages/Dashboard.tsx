@@ -1,30 +1,60 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { Layout } from '../components/Layout';
-import { Trophy, Shield, Ticket, Users, Clock, TrendingUp } from 'lucide-react';
+import { Trophy, Shield, Ticket, Users, Clock, TrendingUp, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 export function Dashboard() {
-  const { fanscoreRanking, shieldData, rouletteHistory, fetchFanscoreRanking, fetchShieldData, fetchRouletteHistory } = useAppStore();
+  const { fanscoreRanking, shieldData, rouletteHistory, todayActiveCount, fetchFanscoreRanking, fetchShieldData, fetchRouletteHistory, fetchTodayActiveCount } = useAppStore();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchFanscoreRanking();
-    fetchShieldData();
-    fetchRouletteHistory();
-  }, [fetchFanscoreRanking, fetchShieldData, fetchRouletteHistory]);
+    loadData();
+  }, []);
 
-  // 미사용 룰렛 기록만 필터링
-  const pendingRoulette = rouletteHistory.filter(record => !record.used);
+  const loadData = async () => {
+    await Promise.all([
+      fetchFanscoreRanking(),
+      fetchShieldData(),
+      fetchRouletteHistory(),
+      fetchTodayActiveCount()
+    ]);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadData();
+      toast.success('데이터를 새로고침했습니다.');
+    } catch (error) {
+      toast.error('데이터 새로고침에 실패했습니다.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   return (
     <Layout>
       <div className="space-y-8">
             {/* Header */}
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                대시보드
-              </h1>
-              <p className="text-gray-600 text-lg">청취자 애청지수 도구 메인 화면</p>
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  대시보드
+                </h1>
+                <p className="text-gray-600 text-lg">청취자 애청지수 도구 메인 화면</p>
+              </div>
+              <Button 
+                onClick={handleRefresh} 
+                disabled={isRefreshing}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                새로고침
+              </Button>
             </div>
 
         {/* Stats Grid */}
@@ -43,17 +73,17 @@ export function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* 미사용 룰렛 티켓 */}
+          {/* 오늘 활동한 청취자 */}
           <Card className="border shadow-lg bg-gradient-to-br from-purple-50 to-purple-100">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">미사용 티켓</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">오늘 활동 청취자</CardTitle>
               <div className="p-2 rounded-lg bg-purple-500/10">
-                <Ticket className="h-5 w-5 text-purple-600" />
+                <TrendingUp className="h-5 w-5 text-purple-600" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-gray-900">{pendingRoulette.length}</div>
-              <p className="text-xs text-gray-500 mt-1">DJ가 사용할 예정인 티켓</p>
+              <div className="text-3xl font-bold text-gray-900">{todayActiveCount}</div>
+              <p className="text-xs text-gray-500 mt-1">오늘 활동한 청취자 수</p>
             </CardContent>
           </Card>
 

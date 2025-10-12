@@ -6,6 +6,7 @@ import templateRoutes from './routes/templates';
 import rouletteRoutes from './routes/roulette';
 import shieldRoutes from './routes/shield';
 import quizRoutes from './routes/quiz';
+import migrationFanscoreRoutes from './routes/migration-fanscore';
 import logger from './utils/logger';
 import { initializeAllDataFiles } from './utils/fileManager';
 
@@ -57,6 +58,7 @@ app.use('/templates', templateRoutes);
 app.use('/roulette', rouletteRoutes);
 app.use('/shield', shieldRoutes);
 app.use('/quiz', quizRoutes);
+app.use('/migration/fanscore', migrationFanscoreRoutes);
 
 // 404 핸들러
 app.use('*', (req, res) => {

@@ -35,44 +35,14 @@ export function UserManagement() {
       const response = await fetch('stp://starter-pack.sopia.dev/fanscore/ranking');
       const data = await response.json();
       
-      // 룰렛 티켓 수 계산 (미사용 룰렛 기록)
-      const rouletteResponse = await fetch('stp://starter-pack.sopia.dev/roulette/history');
-      const rouletteHistory = await rouletteResponse.json();
-      
-      // 각 사용자별 티켓 수 계산
-      const userTickets = rouletteHistory.reduce((acc: any, record: any) => {
-        if (!record.used) {
-          acc[record.user_id] = (acc[record.user_id] || 0) + 1;
-        }
-        return acc;
-      }, {});
-
-      // 사용자 데이터에 티켓 정보 추가
-      const enrichedUsers = data.map((user: UserData) => ({
-        ...user,
-        roulette_tickets: userTickets[user.user_id] || 0,
-        lottery_tickets: 0, // 추후 구현
-        level: calculateLevel(user.score),
-      }));
-
-      setUsers(enrichedUsers);
+      // API에서 이미 roulette_tickets를 포함하여 반환하므로 그대로 사용
+      setUsers(data);
     } catch (error) {
       console.error('Failed to fetch users:', error);
       toast.error('청취자 목록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // 레벨 계산 함수 (점수 기반)
-  const calculateLevel = (score: number): number => {
-    if (score < 100) return 1;
-    if (score < 500) return 2;
-    if (score < 1000) return 3;
-    if (score < 2500) return 4;
-    if (score < 5000) return 5;
-    if (score < 10000) return 6;
-    return 7;
   };
 
   // 검색 필터링

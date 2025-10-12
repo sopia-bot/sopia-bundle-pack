@@ -5,6 +5,44 @@ import logger from './logger';
 // 데이터 디렉토리 경로
 const dataDir = path.join(__pkgdir, 'data');
 
+// 파일별 작업 큐를 관리하는 맵
+const fileOperationQueues = new Map<string, Promise<any>>();
+
+/**
+ * 파일 작업을 큐에 추가하여 순차적으로 실행
+ * @param filename 파일명
+ * @param operation 실행할 작업
+ * @returns 작업 결과
+ */
+async function queueFileOperation<T>(filename: string, operation: () => T | Promise<T>): Promise<T> {
+  // 해당 파일의 마지막 작업 가져오기
+  const lastOperation = fileOperationQueues.get(filename) || Promise.resolve();
+  
+  // 새 작업을 체이닝
+  const newOperation = lastOperation
+    .then(() => operation())
+    .catch((error) => {
+      // 이전 작업의 에러는 로깅만 하고 현재 작업은 계속 진행
+      logger.warn('Previous file operation failed', { 
+        filename, 
+        error: error?.message || 'Unknown error' 
+      });
+      return operation();
+    });
+  
+  // 큐에 새 작업 저장
+  fileOperationQueues.set(filename, newOperation);
+  
+  // 작업 완료 후 큐에서 제거 (메모리 관리)
+  newOperation.finally(() => {
+    if (fileOperationQueues.get(filename) === newOperation) {
+      fileOperationQueues.delete(filename);
+    }
+  });
+  
+  return newOperation;
+}
+
 // 기본 데이터 정의
 const defaultData = {
   fanscore: [
@@ -29,11 +67,11 @@ const defaultData = {
       template_id: "default-1",
       name: "기본 룰렛",
       mode: "sticker",
-      sticker: "heart",
+      sticker: "sticker_kr_star",
       spoon: 1,
       division: true,
       auto_run: true,
-      sound_below_1percent: true,
+      enabled: true,
       items: [
         { type: "shield", label: "실드 1회", percentage: 10 },
         { type: "ticket", label: "복권", percentage: 0.001 },
@@ -43,6 +81,12 @@ const defaultData = {
   ],
   
   'roulette-history': [],
+
+  // 사용자별 룰렛 티켓 및 킵 아이템
+  roulette: {
+    tickets: [],  // UserRouletteTickets[]
+    keepItems: [] // UserKeepItems[]
+  },
 
   quiz: [],
   
@@ -96,47 +140,51 @@ export function ensureDataFile(filename: string, defaultContent: any): boolean {
 }
 
 /**
- * JSON 파일을 안전하게 읽기
+ * JSON 파일을 안전하게 읽기 (큐 사용)
  * @param filename 파일명
  * @returns 파싱된 JSON 데이터
  */
-export function readJsonFile(filename: string): any {
-  const filePath = path.join(dataDir, filename);
-  
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(content);
-  } catch (error) {
-    logger.error('Failed to read JSON file', {
-      filename,
-      filePath,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    throw error;
-  }
+export async function readJsonFile(filename: string): Promise<any> {
+  return queueFileOperation(filename, () => {
+    const filePath = path.join(dataDir, filename);
+    
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(content);
+    } catch (error) {
+      logger.error('Failed to read JSON file', {
+        filename,
+        filePath,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
+  });
 }
 
 /**
- * JSON 파일을 안전하게 쓰기
+ * JSON 파일을 안전하게 쓰기 (큐 사용)
  * @param filename 파일명
  * @param data 저장할 데이터
  */
-export function writeJsonFile(filename: string, data: any): void {
-  const filePath = path.join(dataDir, filename);
-  
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    logger.debug('JSON file written successfully', { filename });
-  } catch (error) {
-    logger.error('Failed to write JSON file', {
-      filename,
-      filePath,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    throw error;
-  }
+export async function writeJsonFile(filename: string, data: any): Promise<void> {
+  return queueFileOperation(filename, () => {
+    const filePath = path.join(dataDir, filename);
+    
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+      logger.debug('JSON file written successfully', { filename });
+    } catch (error) {
+      logger.error('Failed to write JSON file', {
+        filename,
+        filePath,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
+  });
 }
 
 /**
@@ -161,13 +209,13 @@ export function initializeAllDataFiles(): void {
  * @param dataType 데이터 타입
  * @returns JSON 데이터
  */
-export function getDataFile(dataType: keyof typeof defaultData): any {
+export async function getDataFile(dataType: keyof typeof defaultData): Promise<any> {
   const filename = dataType.includes('-') ? `${dataType}.json` : `${dataType}.json`;
   
   // 파일이 없으면 기본 데이터로 초기화
   ensureDataFile(filename, defaultData[dataType]);
   
-  // 파일 읽기
+  // 파일 읽기 (큐 사용)
   return readJsonFile(filename);
 }
 
@@ -176,7 +224,7 @@ export function getDataFile(dataType: keyof typeof defaultData): any {
  * @param dataType 데이터 타입
  * @param data 저장할 데이터
  */
-export function saveDataFile(dataType: keyof typeof defaultData, data: any): void {
+export async function saveDataFile(dataType: keyof typeof defaultData, data: any): Promise<void> {
   const filename = dataType.includes('-') ? `${dataType}.json` : `${dataType}.json`;
-  writeJsonFile(filename, data);
+  return writeJsonFile(filename, data);
 }

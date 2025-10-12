@@ -3,7 +3,24 @@ import { LotteryManager } from '../managers/lottery-manager';
 import { FanscoreUser } from '../types/fanscore';
 
 const DOMAIN = 'starter-pack.sopia.dev';
-const lotteryManager = new LotteryManager();
+
+/**
+ * 현재 방의 모든 청취자 가져오기
+ */
+async function getAllListeners(liveId: number): Promise<User[]> {
+  let members: User[] = [];
+  const liveInfo = await window.$sopia.api.lives.info(liveId);
+  const authorInfo = liveInfo.res.results[0].author as User;
+  members.push(authorInfo);
+  let req = await window.$sopia.api.lives.listeners(liveId);
+  let res = req.res;
+  members = members.concat(req.res.results);
+  while (res.next) {
+    res = await req.next();
+    members = members.concat(res.results);
+  }
+  return members;
+}
 
 /**
  * !복권 [숫자1] [숫자2] [숫자3] - 복권 실행
@@ -11,7 +28,8 @@ const lotteryManager = new LotteryManager();
  */
 export async function handleLottery(
   args: string[],
-  context: { user: User; socket: LiveSocket }
+  context: { user: User; socket: LiveSocket },
+  lotteryManager: LotteryManager
 ): Promise<void> {
   const { user, socket } = context;
 
@@ -67,14 +85,14 @@ export async function handleLottery(
 }
 
 /**
- * !복권지급 전체 [갯수] - DJ 전용, 전체 유저에게 복권 지급
+ * !복권지급 전체 [갯수] - DJ 전용, 현재 방에 있는 등록된 청취자에게 복권 지급
  * !복권지급 [고유닉] [갯수] - DJ 전용, 특정 유저에게 복권 지급
  */
 export async function handleGiveLottery(
   args: string[],
-  context: { user: User; socket: LiveSocket; isAdmin: boolean }
+  context: { user: User; socket: LiveSocket; isAdmin: boolean; liveId: number }
 ): Promise<void> {
-  const { user, socket, isAdmin } = context;
+  const { user, socket, isAdmin, liveId } = context;
 
   if (!isAdmin) {
     await socket.message('❌ 이 명령어는 DJ만 사용할 수 있습니다.');
@@ -95,24 +113,33 @@ export async function handleGiveLottery(
   }
 
   try {
-    // 전체 지급
+    // 전체 지급 (현재 방에 있는 등록된 청취자만)
     if (target === '전체') {
+      // 1. 현재 방의 모든 청취자 가져오기
+      const listeners = await getAllListeners(liveId);
+      console.log(`[!복권지급 전체] Found ${listeners.length} listeners in the room`);
+
+      // 2. 등록된 사용자 목록 가져오기
       const response = await fetch(`stp://${DOMAIN}/fanscore/ranking`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
 
-      const users: FanscoreUser[] = await response.json();
+      const registeredUsers: FanscoreUser[] = await response.json();
+      const registeredUserIds = new Set(registeredUsers.map(u => u.user_id));
+
+      // 3. 방에 있는 청취자 중 등록된 사용자만 필터링
+      const targetUsers = listeners.filter(listener => registeredUserIds.has(listener.id));
       
-      if (users.length === 0) {
-        await socket.message('⚠️ 등록된 사용자가 없습니다.');
+      if (targetUsers.length === 0) {
+        await socket.message('⚠️ 현재 방에 등록된 청취자가 없습니다.');
         return;
       }
 
-      // 모든 유저에게 복권 지급
-      const promises = users.map(u =>
-        fetch(`stp://${DOMAIN}/fanscore/user/${u.user_id}/lottery`, {
+      // 4. 필터링된 유저들에게 복권 지급
+      const promises = targetUsers.map(listener =>
+        fetch(`stp://${DOMAIN}/fanscore/user/${listener.id}/lottery`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ change: count })
@@ -121,8 +148,8 @@ export async function handleGiveLottery(
 
       await Promise.all(promises);
       
-      await socket.message(`✅ 전체 유저(${users.length}명)에게 복권 ${count}장씩 지급했습니다.`);
-      console.log(`[!복권지급 전체] ${user.nickname} gave ${count} lottery tickets to all users`);
+      await socket.message(`✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`);
+      console.log(`[!복권지급 전체] ${user.nickname} gave ${count} lottery tickets to ${targetUsers.length} users in the room`);
       return;
     }
 

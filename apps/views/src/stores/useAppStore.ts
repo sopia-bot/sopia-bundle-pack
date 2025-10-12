@@ -18,11 +18,12 @@ interface RouletteTemplate {
   spoon?: number;
   division: boolean;
   auto_run: boolean;
-  sound_below_1percent: boolean;
+  enabled: boolean;
   items: Array<{
     type: 'shield' | 'ticket' | 'custom';
     label: string;
     percentage: number;
+    value?: number;
   }>;
 }
 
@@ -53,6 +54,7 @@ interface AppState {
   // 애청지수 데이터
   fanscoreRanking: FanscoreUser[];
   shieldData: ShieldData | null;
+  todayActiveCount: number; // 오늘 활동한 청취자 수
   
   // 템플릿 데이터
   templates: RouletteTemplate[];
@@ -66,6 +68,7 @@ interface AppState {
   // 액션들
   fetchFanscoreRanking: () => Promise<void>;
   fetchShieldData: () => Promise<void>;
+  fetchTodayActiveCount: () => Promise<void>; // 오늘 활동 청취자 수 조회
   fetchTemplates: () => Promise<void>;
   fetchRouletteHistory: () => Promise<void>;
   updateRouletteRecord: (recordId: string, used: boolean) => Promise<void>;
@@ -78,6 +81,7 @@ const API_BASE = 'stp://starter-pack.sopia.dev';
 export const useAppStore = create<AppState>((set, get) => ({
   fanscoreRanking: [],
   shieldData: null,
+  todayActiveCount: 0,
   templates: [],
   rouletteHistory: [],
   loading: false,
@@ -92,6 +96,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Failed to fetch fanscore ranking:', error);
     } finally {
       set({ loading: false });
+    }
+  },
+
+  fetchTodayActiveCount: async () => {
+    try {
+      const response = await fetch(`${API_BASE}/fanscore/stats/today-active`);
+      const data = await response.json();
+      set({ todayActiveCount: data.count });
+    } catch (error) {
+      console.error('Failed to fetch today active count:', error);
     }
   },
 

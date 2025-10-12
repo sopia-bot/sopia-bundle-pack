@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { Save, Info, Plus, Trash2, Edit, Ticket } from 'lucide-react';
+import { Save, Info, Plus, Trash2, Edit, Ticket, Database } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { MigrationDialog } from '../components/MigrationDialog';
 
 interface FanscoreConfig {
   enabled: boolean;
@@ -52,6 +53,7 @@ export function FanscoreSettings() {
   const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
   const [newQuiz, setNewQuiz] = useState({ question: '', answer: '' });
+  const [isMigrationDialogOpen, setIsMigrationDialogOpen] = useState(false);
 
   useEffect(() => {
     // 설정 불러오기
@@ -229,6 +231,12 @@ export function FanscoreSettings() {
     setNewQuiz({ question: '', answer: '' });
   };
 
+  const handleMigrationComplete = () => {
+    // 마이그레이션 완료 후 데이터 다시 로드
+    loadConfig();
+    loadQuizzes();
+  };
+
   return (
     <Layout>
       <div className="space-y-8 max-w-4xl">
@@ -271,6 +279,39 @@ export function FanscoreSettings() {
             </div>
           </CardHeader>
         </Card>
+
+        {/* Data Migration */}
+        <Card className="border shadow-lg bg-gradient-to-br from-amber-50 to-amber-100">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
+                  <div className="p-2 rounded-lg bg-amber-500/10">
+                    <Database className="h-5 w-5 text-amber-600" />
+                  </div>
+                  데이터 마이그레이션
+                </CardTitle>
+                <CardDescription className="text-gray-600">
+                  기존 애청지수 번들의 데이터를 불러와서 이전합니다
+                </CardDescription>
+              </div>
+              <Button
+                onClick={() => setIsMigrationDialogOpen(true)}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                <Database className="mr-2 h-4 w-4" />
+                데이터 불러오기
+              </Button>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Migration Dialog */}
+        <MigrationDialog
+          open={isMigrationDialogOpen}
+          onOpenChange={setIsMigrationDialogOpen}
+          onComplete={handleMigrationComplete}
+        />
 
         {/* Score Settings */}
         <Card className="border shadow-lg">

@@ -5,10 +5,10 @@ const { BrowserWindow } = require('electron');
 const router = express.Router();
 
 // 설정 조회
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     logger.debug('Fetching fanscore config');
-    const config = getDataFile('fanscore-config');
+    const config = await getDataFile('fanscore-config');
     logger.info('Fanscore config fetched successfully');
     res.json(config);
   } catch (error: any) {
@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
       spoonScore: config.spoon_score
     });
     
-    saveDataFile('fanscore-config', config);
+    await saveDataFile('fanscore-config', config);
     
     logger.info('Fanscore config saved successfully', {
       enabled: config.enabled,

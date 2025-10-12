@@ -23,12 +23,12 @@ function notifyWorkerQuizUpdate() {
 }
 
 // 퀴즈 목록 조회
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     logger.debug('Fetching quiz list');
     let data;
     try {
-      data = getDataFile('quiz');
+      data = await getDataFile('quiz');
     } catch (fileError) {
       // 파일이 없거나 읽기 실패 시 빈 배열 반환
       logger.warn('Quiz file not found or empty, returning empty array');
@@ -46,7 +46,7 @@ router.get('/', (req, res) => {
 });
 
 // 퀴즈 추가
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     logger.debug('Creating new quiz', { body: req.body });
     const { question, answer } = req.body;
@@ -57,7 +57,7 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Question and answer are required' });
     }
     
-    const data = getDataFile('quiz');
+    const data = await getDataFile('quiz');
     const newQuiz = {
       id: `quiz-${Date.now()}`,
       question: question.trim(),
@@ -66,7 +66,7 @@ router.post('/', (req, res) => {
     };
     
     data.push(newQuiz);
-    saveDataFile('quiz', data);
+    await saveDataFile('quiz', data);
     
     logger.info('Quiz created successfully', {
       id: newQuiz.id,
@@ -88,7 +88,7 @@ router.post('/', (req, res) => {
 });
 
 // 퀴즈 수정
-router.put('/:quizId', (req, res) => {
+router.put('/:quizId', async (req, res) => {
   try {
     const { quizId } = req.params;
     const { question, answer } = req.body;
@@ -99,7 +99,7 @@ router.put('/:quizId', (req, res) => {
       return res.status(400).json({ error: 'Question and answer are required' });
     }
     
-    const data = getDataFile('quiz');
+    const data = await getDataFile('quiz');
     const quizIndex = data.findIndex((quiz: any) => quiz.id === quizId);
     
     if (quizIndex === -1) {
@@ -115,7 +115,7 @@ router.put('/:quizId', (req, res) => {
       updated_at: new Date().toISOString()
     };
     
-    saveDataFile('quiz', data);
+    await saveDataFile('quiz', data);
     
     logger.info('Quiz updated successfully', {
       quizId,
@@ -139,12 +139,12 @@ router.put('/:quizId', (req, res) => {
 });
 
 // 퀴즈 삭제
-router.delete('/:quizId', (req, res) => {
+router.delete('/:quizId', async (req, res) => {
   try {
     const { quizId } = req.params;
     logger.debug('Deleting quiz', { quizId });
     
-    const data = getDataFile('quiz');
+    const data = await getDataFile('quiz');
     const quizIndex = data.findIndex((quiz: any) => quiz.id === quizId);
     
     if (quizIndex === -1) {
@@ -154,7 +154,7 @@ router.delete('/:quizId', (req, res) => {
     
     const deletedQuiz = data[quizIndex];
     data.splice(quizIndex, 1);
-    saveDataFile('quiz', data);
+    await saveDataFile('quiz', data);
     
     logger.info('Quiz deleted successfully', {
       quizId,

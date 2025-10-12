@@ -1,4 +1,5 @@
 import { FanscoreUser } from '../types/fanscore';
+import { FanscoreManager } from './fanscore-manager';
 
 const DOMAIN = 'starter-pack.sopia.dev';
 
@@ -6,6 +7,11 @@ const DOMAIN = 'starter-pack.sopia.dev';
  * 복권 관리자
  */
 export class LotteryManager {
+  private fanscoreManager: FanscoreManager;
+
+  constructor(fanscoreManager: FanscoreManager) {
+    this.fanscoreManager = fanscoreManager;
+  }
   /**
    * 복권 추첨 (0~9 중 서로 다른 3개 숫자)
    */
@@ -99,16 +105,9 @@ export class LotteryManager {
       const matches = this.countMatches(drawn, numbers);
       const reward = this.calculateReward(matches);
 
-      // 경험치 지급
+      // 경험치 지급 (배치 업데이트 시스템 사용)
       if (reward > 0) {
-        const newExp = user.exp + reward;
-        const newScore = user.score + reward;
-        
-        await fetch(`stp://${DOMAIN}/fanscore/user/${userId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ exp: newExp, score: newScore })
-        });
+        this.fanscoreManager.addExpDirect(userId, reward);
       }
 
       return {
@@ -186,16 +185,9 @@ export class LotteryManager {
         body: JSON.stringify({ change: -ticketCount })
       });
 
-      // 경험치 지급
+      // 경험치 지급 (배치 업데이트 시스템 사용)
       if (totalReward > 0) {
-        const newExp = user.exp + totalReward;
-        const newScore = user.score + totalReward;
-        
-        await fetch(`stp://${DOMAIN}/fanscore/user/${userId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ exp: newExp, score: newScore })
-        });
+        this.fanscoreManager.addExpDirect(userId, totalReward);
       }
 
       const breakdown = [

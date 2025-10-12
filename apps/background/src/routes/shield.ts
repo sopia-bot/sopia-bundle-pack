@@ -5,9 +5,9 @@ import { getDataFile, saveDataFile } from '../utils/fileManager';
 const router = express.Router();
 
 // 실드 상태 조회
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const data = getDataFile('shield');
+    const data = await getDataFile('shield');
     res.json(data);
   } catch (error: any) {
     logger.error('Failed to fetch shield data', {
@@ -19,12 +19,12 @@ router.get('/', (req, res) => {
 });
 
 // 실드 변경
-router.put('/change', (req, res) => {
+router.put('/change', async (req, res) => {
   try {
     const { change, reason } = req.body;
     logger.debug('Changing shield', { change, reason });
     
-    const data = getDataFile('shield');
+    const data = await getDataFile('shield');
     
     const oldCount = data.shield_count;
     const newCount = data.shield_count + change;
@@ -36,7 +36,7 @@ router.put('/change', (req, res) => {
       time: new Date().toISOString()
     });
     
-    saveDataFile('shield', data);
+    await saveDataFile('shield', data);
     
     logger.info('Shield changed successfully', {
       oldCount,
@@ -57,9 +57,9 @@ router.put('/change', (req, res) => {
 });
 
 // 실드 초기화
-router.put('/reset', (req, res) => {
+router.put('/reset', async (req, res) => {
   try {
-    const data = getDataFile('shield');
+    const data = await getDataFile('shield');
     
     data.shield_count = 0;
     data.history.push({
@@ -68,7 +68,7 @@ router.put('/reset', (req, res) => {
       time: new Date().toISOString()
     });
     
-    saveDataFile('shield', data);
+    await saveDataFile('shield', data);
     res.json(data);
   } catch (error: any) {
     logger.error('Failed to reset shield', {
