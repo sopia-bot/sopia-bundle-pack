@@ -3,7 +3,7 @@
   "name:ko": "소피아 통합 번들팩",
   "description": "this is descript",
 	"description:ko": "룰렛, 실드, 애청지수를 전부 통합하여 관리할 수 있습니다.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "./apps/worker/index.js",
   "page": "index.html",
   "pageRoot": "apps/views",
@@ -14,11 +14,18 @@
     "file": "./apps/background/index.js"
   },
   "release-note": {
+    "1.0.2": "- 기록 초기화 기능 추가\n- 데이터 안정성 향상 (먹통 버그, 점수 과부하 수정)\n- 복권 관련 데이터 문제 해결"
   },
   "sopia": {
     "ignore:upload": [
       "node_modules",
-      "migrated"
+      "migrated",
+      "data",
+      "logs"
+    ],
+    "ignore:fetch": [
+      "data",
+      "logs"
     ]
   },
   "dependencies": {
