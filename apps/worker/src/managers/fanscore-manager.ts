@@ -177,6 +177,28 @@ export class FanscoreManager {
   }
 
   /**
+   * 복권 티켓 변경 (pendingUpdates 사용)
+   */
+  updateLotteryTickets(userId: number, change: number, nickname: string, tag: string) {
+    const pending = this.pendingUpdates.get(userId) || { user_id: userId };
+    pending.lotteryChange = (pending.lotteryChange || 0) + change;
+    pending.nickname = nickname;
+    pending.tag = tag;
+    this.pendingUpdates.set(userId, pending);
+
+    // 캐시 즉시 업데이트 (동기화)
+    const user = this.userCache.get(userId);
+    if (user) {
+      this.userCache.set(userId, {
+        ...user,
+        lottery_tickets: Math.max(0, (user.lottery_tickets || 0) + change),
+        nickname,
+        tag
+      });
+    }
+  }
+
+  /**
    * 캐시된 사용자들의 rank 업데이트
    */
   private async updateUserRanksInCache() {
@@ -240,6 +262,11 @@ export class FanscoreManager {
         const newChatCount = user.chat_count + (pending.chat ? Math.floor(pending.chat / (this.config?.chat_score || 1)) : 0);
         const newLikeCount = user.like_count + (pending.like ? Math.floor(pending.like / (this.config?.like_score || 1)) : 0);
         const newSpoonCount = user.spoon_count + (pending.spoon ? Math.floor(pending.spoon / (this.config?.spoon_score || 1)) : 0);
+        
+        // 복권 티켓 업데이트
+        const newLotteryTickets = pending.lotteryChange 
+          ? Math.max(0, user.lottery_tickets + pending.lotteryChange) 
+          : user.lottery_tickets;
 
         const update = {
           user_id: userId,
@@ -249,6 +276,7 @@ export class FanscoreManager {
           chat_count: newChatCount,
           like_count: newLikeCount,
           spoon_count: newSpoonCount,
+          lottery_tickets: newLotteryTickets,
           attendance_live_id: user.attendance_live_id,
           nickname: pending.nickname || '',
           tag: pending.tag || '',
@@ -304,25 +332,20 @@ export class FanscoreManager {
   }
 
   /**
-   * 복권 티켓 지급
+   * 복권 티켓 지급 (pendingUpdates 사용)
    */
   async giveLotteryTickets(userId: number, count: number, reason: string): Promise<void> {
     try {
-      const response = await fetch(`stp://${DOMAIN}/fanscore/user/${userId}/lottery`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ change: count })
-      });
-
-      if (response.ok) {
-        const user = await response.json();
-        this.userCache.set(userId, {
-          ...user,
-          ...this.userCache.get(userId),
-          lottery_tickets: user.lottery_tickets
-        });
-        console.log(`[FanscoreManager] Lottery tickets given to user ${userId}: +${count} (${reason})`);
+      const user = this.userCache.get(userId);
+      if (!user) {
+        console.error(`[FanscoreManager] User ${userId} not found in cache for lottery tickets`);
+        return;
       }
+
+      // pendingUpdates에 추가 (processBatchUpdate에서 처리됨)
+      this.updateLotteryTickets(userId, count, user.nickname, user.tag);
+      
+      console.log(`[FanscoreManager] Lottery tickets scheduled to give to user ${userId}: +${count} (${reason})`);
     } catch (error) {
       console.error(`[FanscoreManager] Failed to give lottery tickets to user ${userId}:`, error);
     }

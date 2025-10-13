@@ -49,5 +49,6 @@ export interface PendingUpdate {
   like?: number;
   spoon?: number;
   expDirect?: number; // 복권, 퀴즈 등 직접 경험치
+  lotteryChange?: number; // 복권 티켓 변경
 }
 

@@ -12,13 +12,14 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { Layout } from '../components/Layout';
-import { Users, Trophy, Ticket, Award, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, Check } from 'lucide-react';
+import { Users, Trophy, Ticket, Award, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, Check, RotateCcw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
 import {
   Command,
   CommandEmpty,
@@ -91,6 +92,18 @@ export function UserManagement() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [ticketCount, setTicketCount] = useState<string>('1');
   const [grantingTicket, setGrantingTicket] = useState(false);
+  
+  // Reset dialog states
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetCategories, setResetCategories] = useState({
+    fanscore: true,
+    chat: true,
+    like: true,
+    lottery: true,
+    spoon: true,
+    users: false, // 기본값은 false (매우 위험한 작업이므로)
+  });
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -177,6 +190,45 @@ export function UserManagement() {
       toast.error('티켓 지급에 실패했습니다.');
     } finally {
       setGrantingTicket(false);
+    }
+  };
+
+  const handleReset = async () => {
+    const selectedCategories = Object.entries(resetCategories)
+      .filter(([_, checked]) => checked)
+      .map(([key]) => key);
+
+    if (selectedCategories.length === 0) {
+      toast.error('최소 하나의 카테고리를 선택해주세요.');
+      return;
+    }
+
+    try {
+      setResetting(true);
+
+      const response = await fetch('stp://starter-pack.sopia.dev/fanscore/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          categories: selectedCategories,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success(`${result.updatedCount}명의 기록이 초기화되었습니다.`);
+        setResetDialogOpen(false);
+        fetchUsers(); // 목록 새로고침
+      } else {
+        throw new Error('Failed to reset');
+      }
+    } catch (error) {
+      console.error('Failed to reset:', error);
+      toast.error('초기화에 실패했습니다.');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -524,11 +576,21 @@ export function UserManagement() {
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            청취자 관리
-          </h1>
-          <p className="text-gray-600 text-lg">애청지수 청취자들의 정보를 확인하고 관리합니다</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              청취자 관리
+            </h1>
+            <p className="text-gray-600 text-lg">애청지수 청취자들의 정보를 확인하고 관리합니다</p>
+          </div>
+          <Button
+            variant="destructive"
+            onClick={() => setResetDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            기록 전체 초기화
+          </Button>
         </div>
 
         {/* Stats */}
@@ -932,6 +994,176 @@ export function UserManagement() {
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 {grantingTicket ? '지급 중...' : '티켓 지급'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Dialog */}
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-red-600">
+                <AlertTriangle className="h-6 w-6" />
+                기록 전체 초기화
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                초기화할 카테고리를 선택하세요. 이 작업은 되돌릴 수 없습니다.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Category Checkboxes */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="reset-fanscore" className="text-base font-medium">
+                      애청지수, 레벨
+                    </Label>
+                    <p className="text-xs text-gray-500">
+                      score, exp, rank, level, attendance_live_id, last_activity_at
+                    </p>
+                  </div>
+                  <Switch
+                    id="reset-fanscore"
+                    checked={resetCategories.fanscore}
+                    onCheckedChange={(checked) =>
+                      setResetCategories({ ...resetCategories, fanscore: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="reset-chat" className="text-base font-medium">
+                      채팅 정보
+                    </Label>
+                    <p className="text-xs text-gray-500">chat_count</p>
+                  </div>
+                  <Switch
+                    id="reset-chat"
+                    checked={resetCategories.chat}
+                    onCheckedChange={(checked) =>
+                      setResetCategories({ ...resetCategories, chat: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="reset-like" className="text-base font-medium">
+                      좋아요 정보
+                    </Label>
+                    <p className="text-xs text-gray-500">like_count</p>
+                  </div>
+                  <Switch
+                    id="reset-like"
+                    checked={resetCategories.like}
+                    onCheckedChange={(checked) =>
+                      setResetCategories({ ...resetCategories, like: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="reset-lottery" className="text-base font-medium">
+                      복권 정보
+                    </Label>
+                    <p className="text-xs text-gray-500">lottery_tickets</p>
+                  </div>
+                  <Switch
+                    id="reset-lottery"
+                    checked={resetCategories.lottery}
+                    onCheckedChange={(checked) =>
+                      setResetCategories({ ...resetCategories, lottery: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="reset-spoon" className="text-base font-medium">
+                      스푼 정보
+                    </Label>
+                    <p className="text-xs text-gray-500">spoon_count</p>
+                  </div>
+                  <Switch
+                    id="reset-spoon"
+                    checked={resetCategories.spoon}
+                    onCheckedChange={(checked) =>
+                      setResetCategories({ ...resetCategories, spoon: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border-2 border-red-400 rounded-lg bg-red-50">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="reset-users" className="text-base font-medium text-red-800 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      청취자 정보 (전체 삭제)
+                    </Label>
+                    <p className="text-xs text-red-600 font-semibold">
+                      모든 청취자 데이터가 영구 삭제됩니다!
+                    </p>
+                  </div>
+                  <Switch
+                    id="reset-users"
+                    checked={resetCategories.users}
+                    onCheckedChange={(checked) =>
+                      setResetCategories({ ...resetCategories, users: checked })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Warning */}
+              <Card className={`${resetCategories.users ? 'border-red-600 bg-red-100' : 'border-red-500 bg-red-50'}`}>
+                <CardContent className="p-4">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-semibold text-red-800">주의사항</p>
+                      {resetCategories.users ? (
+                        <>
+                          <p className="text-sm text-red-800 font-bold">
+                            ⚠️ 청취자 정보가 선택되어 있습니다!
+                          </p>
+                          <p className="text-sm text-red-700">
+                            모든 청취자 데이터가 영구적으로 삭제되며 복구할 수 없습니다.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-red-700">
+                            이 작업은 모든 사용자의 데이터를 초기화합니다.
+                          </p>
+                          <p className="text-sm text-red-700">
+                            초기화된 데이터는 복구할 수 없습니다.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setResetDialogOpen(false)}
+                disabled={resetting}
+              >
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleReset}
+                disabled={resetting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {resetting ? '초기화 중...' : '초기화 실행'}
               </Button>
             </DialogFooter>
           </DialogContent>

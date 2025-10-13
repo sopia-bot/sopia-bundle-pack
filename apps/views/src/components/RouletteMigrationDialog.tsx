@@ -347,6 +347,26 @@ export function RouletteMigrationDialog({ open, onOpenChange, onSuccess }: Roule
                     <Label className="text-lg font-semibold mb-3 block">
                       룰렛 기록 ({previewData.historyCount}개)
                     </Label>
+                    
+                    {/* 경고 메시지 */}
+                    <Card className="mb-3 border-yellow-500 bg-yellow-50">
+                      <CardContent className="p-4">
+                        <div className="flex gap-3">
+                          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="font-semibold text-yellow-800">기록 유실 주의</p>
+                            <p className="text-sm text-yellow-700">
+                              기존 당첨된 기록에서 현재 설정된 룰렛 아이템이 없는 경우, 해당 기록은 유실됩니다.
+                            </p>
+                            <p className="text-sm text-yellow-700">
+                              예: <code className="px-1 py-0.5 bg-yellow-100 rounded text-yellow-900">냥체 10분</code>이 당첨된 기록이 있지만 
+                              현재 <code className="px-1 py-0.5 bg-yellow-100 rounded text-yellow-900">냥체 10분</code>이란 아이템이 룰렛 세팅에 없는 경우
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
                     <Card>
                       <CardContent className="p-0">
                         <div className="border rounded-md">

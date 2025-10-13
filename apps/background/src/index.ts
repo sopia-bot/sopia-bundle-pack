@@ -9,10 +9,97 @@ import quizRoutes from './routes/quiz';
 import migrationFanscoreRoutes from './routes/migration-fanscore';
 import migrationRouletteRoutes from './routes/migration-roulette';
 import logger from './utils/logger';
-import { initializeAllDataFiles } from './utils/fileManager';
+import { initializeAllDataFiles, getDataFile, saveDataFile } from './utils/fileManager';
 
 const app = express();
 app.use(express.json());
+
+// 타입 안전 파싱 함수
+function safeIntData(data: any, defaultValue: number = 0): number {
+  if (typeof data === 'number' && !isNaN(data)) {
+    return Math.floor(data);
+  }
+  if (typeof data === 'string') {
+    if (data.match(/^\d+$/)) {
+      return parseInt(data.match(/^\d+/)?.[0] || defaultValue.toString(), 10);
+    }
+    return defaultValue;
+  }
+  return defaultValue;
+}
+
+function safeBooleanData(data: any, defaultValue: boolean = false): boolean {
+  if (typeof data === 'boolean') {
+    return data;
+  }
+  if (data === 'true' || data === true) {
+    return true;
+  }
+  if (data === 'false' || data === false) {
+    return false;
+  }
+  return defaultValue;
+}
+
+// Fanscore Config 타입 검증 및 수정
+async function validateAndFixFanscoreConfig() {
+  try {
+    const config = await getDataFile('fanscore-config');
+    
+    const defaultConfig = {
+      enabled: true,
+      attendance_score: 10,
+      chat_score: 1,
+      like_score: 10,
+      spoon_score: 100,
+      quiz_enabled: false,
+      quiz_bonus: 100,
+      quiz_interval: 30,
+      quiz_timeout: 5,
+      lottery_enabled: true,
+      lottery_spoon_required: 100
+    };
+
+    let needsUpdate = false;
+
+    // 타입 검증 및 수정
+    const validatedConfig = {
+      enabled: safeBooleanData(config.enabled, defaultConfig.enabled),
+      attendance_score: safeIntData(config.attendance_score, defaultConfig.attendance_score),
+      chat_score: safeIntData(config.chat_score, defaultConfig.chat_score),
+      like_score: safeIntData(config.like_score, defaultConfig.like_score),
+      spoon_score: safeIntData(config.spoon_score, defaultConfig.spoon_score),
+      quiz_enabled: safeBooleanData(config.quiz_enabled, defaultConfig.quiz_enabled),
+      quiz_bonus: safeIntData(config.quiz_bonus, defaultConfig.quiz_bonus),
+      quiz_interval: safeIntData(config.quiz_interval, defaultConfig.quiz_interval),
+      quiz_timeout: safeIntData(config.quiz_timeout, defaultConfig.quiz_timeout),
+      lottery_enabled: safeBooleanData(config.lottery_enabled, defaultConfig.lottery_enabled),
+      lottery_spoon_required: safeIntData(config.lottery_spoon_required, defaultConfig.lottery_spoon_required)
+    };
+
+    // 변경사항 확인
+    if (JSON.stringify(config) !== JSON.stringify(validatedConfig)) {
+      needsUpdate = true;
+      logger.warn('Fanscore config type mismatch detected, fixing...', {
+        original: config,
+        validated: validatedConfig
+      });
+    }
+
+    // 변경사항이 있으면 저장
+    if (needsUpdate) {
+      await saveDataFile('fanscore-config', validatedConfig);
+      logger.info('Fanscore config validated and fixed');
+    } else {
+      logger.debug('Fanscore config validation passed');
+    }
+  } catch (error: any) {
+    logger.error('Failed to validate fanscore config', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined
+    });
+  }
+}
 
 // 요청 로깅 미들웨어
 app.use((req, res, next) => {
@@ -104,6 +191,9 @@ try {
     stack: error?.stack || undefined
   });
 }
+
+// Fanscore Config 타입 검증 및 수정
+validateAndFixFanscoreConfig();
 
 // 서버 시작 로그
 logger.info('Starter Pack Backend Server initialized', {

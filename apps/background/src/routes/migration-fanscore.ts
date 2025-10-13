@@ -68,6 +68,19 @@ interface PreviewData {
   }>;
 }
 
+function safeIntData(data: any, defaultValue: number = 0) {
+  if ( typeof data === 'string' ) {
+    if (data.match(/^\d+$/)) {
+      return parseInt(data.match(/^\d+/)?.[0] || defaultValue.toString(), 10);
+    }
+    return defaultValue;
+  }
+  if ( typeof data === 'number' ) {
+    return data;
+  }
+  return defaultValue;
+}
+
 /**
  * GET /migration/fanscore/preview
  * 마이그레이션할 데이터 미리보기 (번들 설치 확인 포함)
@@ -134,12 +147,12 @@ router.get('/preview', async (req, res) => {
       users: oldData.user_info.map(user => ({
         nickname: user.nickname,
         tag: user.tag,
-        score: user.point,
-        exp: user.point,
-        chat_count: user.chat_count || 0,
-        like_count: user.heart_count || 0,
-        spoon_count: (user.spoon && user.spoon.length > 0) ? user.spoon[0] : 0,
-        lottery_tickets: (user.spoon && user.spoon.length > 2) ? user.spoon[2] : 0,
+        score: safeIntData(user.point),
+        exp: safeIntData(user.point),
+        chat_count: safeIntData(user.chat_count, 0),
+        like_count: safeIntData(user.heart_count, 0),
+        spoon_count: safeIntData((user.spoon && user.spoon.length > 0) ? user.spoon[0] : 0),
+        lottery_tickets: safeIntData((user.spoon && user.spoon.length > 2) ? user.spoon[2] : 0),
       }))
     };
 
@@ -190,16 +203,16 @@ router.post('/execute', async (req, res) => {
     
     const newConfig = {
       enabled: true,
-      attendance_score: data.config.attendance_score,
-      chat_score: data.config.chat_score,
-      like_score: data.config.like_score,
+      attendance_score: safeIntData(data.config.attendance_score),
+      chat_score: safeIntData(data.config.chat_score),
+      like_score: safeIntData(data.config.like_score),
       spoon_score: 100, // 기본값 유지
-      quiz_enabled: data.config.quiz_enabled,
-      quiz_bonus: data.config.quiz_bonus,
-      quiz_interval: data.config.quiz_interval,
+      quiz_enabled: data.config.quiz_enabled === true || (data.config.quiz_enabled as any) === 'true',
+      quiz_bonus: safeIntData(data.config.quiz_bonus),
+      quiz_interval: safeIntData(data.config.quiz_interval),
       quiz_timeout: 5, // 기본값
       lottery_enabled: true, // 기본값
-      lottery_spoon_required: data.config.lottery_spoon_required,
+      lottery_spoon_required: safeIntData(data.config.lottery_spoon_required),
     };
 
     await saveDataFile('fanscore-config', newConfig);

@@ -364,4 +364,84 @@ router.get('/user-by-tag/:tag', async (req, res) => {
   }
 });
 
+// 전체 기록 초기화
+router.post('/reset', async (req, res) => {
+  try {
+    const { categories } = req.body; // ['fanscore', 'chat', 'like', 'lottery', 'spoon', 'users']
+    
+    logger.debug('Resetting user records', { categories });
+    
+    let data = await getDataFile('fanscore');
+    let updatedCount = 0;
+    
+    // 청취자 정보 전체 삭제
+    if (categories.includes('users')) {
+      logger.warn('Deleting all user data');
+      updatedCount = data.length;
+      data = [];
+      await saveDataFile('fanscore', data);
+      
+      logger.info('All user data deleted', { deletedCount: updatedCount });
+      
+      res.json({ 
+        success: true, 
+        updatedCount,
+        categories,
+        message: 'All user data deleted'
+      });
+      return;
+    }
+    
+    // 부분 초기화
+    data.forEach((user: any) => {
+      if (categories.includes('fanscore')) {
+        user.score = 0;
+        user.exp = 0;
+        user.level = 1;
+        user.rank = 0;
+        user.attendance_live_id = null;
+        user.last_activity_at = null;
+      }
+      if (categories.includes('chat')) {
+        user.chat_count = 0;
+      }
+      if (categories.includes('like')) {
+        user.like_count = 0;
+      }
+      if (categories.includes('lottery')) {
+        user.lottery_tickets = 0;
+      }
+      if (categories.includes('spoon')) {
+        user.spoon_count = 0;
+      }
+      updatedCount++;
+    });
+    
+    await saveDataFile('fanscore', data);
+    
+    // 애청지수 초기화가 포함되어 있으면 순위 재정렬
+    if (categories.includes('fanscore')) {
+      await recalculateRanks();
+    }
+    
+    logger.info('User records reset successfully', { 
+      categories, 
+      updatedCount 
+    });
+    
+    res.json({ 
+      success: true, 
+      updatedCount,
+      categories 
+    });
+  } catch (error: any) {
+    logger.error('Failed to reset user records', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined,
+      body: req.body
+    });
+    res.status(500).json({ error: 'Failed to reset user records' });
+  }
+});
+
 export default router;

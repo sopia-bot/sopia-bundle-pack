@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-table';
 import { useAppStore } from '../stores/useAppStore';
 import { Layout } from '../components/Layout';
-import { Filter, Check, X, Clock, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown } from 'lucide-react';
+import { Filter, Check, X, Clock, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, RotateCcw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -65,6 +73,11 @@ export function RouletteHistory() {
   
   // Combobox state for user search
   const [userComboboxOpen, setUserComboboxOpen] = useState(false);
+  
+  // Reset dialog states
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetTemplateId, setResetTemplateId] = useState<string>('all');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchRouletteHistory();
@@ -102,6 +115,39 @@ export function RouletteHistory() {
     } catch (error) {
       console.error('Failed to update record:', error);
       toast.error('상태 변경에 실패했습니다.');
+    }
+  };
+
+  const handleReset = async () => {
+    try {
+      setResetting(true);
+
+      const response = await fetch('stp://starter-pack.sopia.dev/roulette/history/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateId: resetTemplateId,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const templateName = resetTemplateId === 'all' 
+          ? '전체' 
+          : templates.find(t => t.template_id === resetTemplateId)?.name || resetTemplateId;
+        toast.success(`${templateName} 기록 ${result.deletedCount}개가 초기화되었습니다.`);
+        setResetDialogOpen(false);
+        await fetchRouletteHistory(); // 목록 새로고침
+      } else {
+        throw new Error('Failed to reset');
+      }
+    } catch (error) {
+      console.error('Failed to reset:', error);
+      toast.error('초기화에 실패했습니다.');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -342,9 +388,19 @@ export function RouletteHistory() {
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">룰렛 기록</h1>
-          <p className="text-gray-600 text-lg">룰렛 당첨 기록과 사용 상태를 관리합니다</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">룰렛 기록</h1>
+            <p className="text-gray-600 text-lg">룰렛 당첨 기록과 사용 상태를 관리합니다</p>
+          </div>
+          <Button
+            variant="destructive"
+            onClick={() => setResetDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            기록 초기화
+          </Button>
         </div>
 
         {/* Filters */}
@@ -572,6 +628,112 @@ export function RouletteHistory() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Reset Dialog */}
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-red-600">
+                <AlertTriangle className="h-6 w-6" />
+                룰렛 기록 초기화
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                초기화할 템플릿을 선택하세요. 이 작업은 되돌릴 수 없습니다.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Template Selection */}
+              <div>
+                <Label htmlFor="reset-template" className="text-base font-medium">
+                  초기화할 템플릿
+                </Label>
+                <Select value={resetTemplateId} onValueChange={setResetTemplateId}>
+                  <SelectTrigger className="w-full mt-2">
+                    <SelectValue placeholder="템플릿을 선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 초기화</SelectItem>
+                    {templates.map((template) => (
+                      <SelectItem key={template.template_id} value={template.template_id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  전체 초기화를 선택하면 모든 템플릿의 기록이 삭제됩니다
+                </p>
+              </div>
+
+              {/* Info Card */}
+              {resetTemplateId !== 'all' && (
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="p-4">
+                    <div className="text-sm text-blue-800">
+                      <p className="font-semibold mb-1">선택한 템플릿 기록만 삭제됩니다</p>
+                      <p>
+                        템플릿: {templates.find(t => t.template_id === resetTemplateId)?.name}
+                      </p>
+                      <p className="mt-1 text-xs text-blue-600">
+                        해당 기록: {rouletteHistory.filter(r => r.template_id === resetTemplateId).length}개
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {resetTemplateId === 'all' && (
+                <Card className="border-orange-200 bg-orange-50">
+                  <CardContent className="p-4">
+                    <div className="text-sm text-orange-800">
+                      <p className="font-semibold mb-1">전체 기록이 삭제됩니다</p>
+                      <p className="text-xs text-orange-600">
+                        총 {rouletteHistory.length}개의 기록이 삭제됩니다
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Warning */}
+              <Card className="border-red-500 bg-red-50">
+                <CardContent className="p-4">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-semibold text-red-800">주의사항</p>
+                      <p className="text-sm text-red-700">
+                        삭제된 기록은 복구할 수 없습니다.
+                      </p>
+                      <p className="text-sm text-red-700">
+                        신중하게 선택해주세요.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setResetDialogOpen(false)}
+                disabled={resetting}
+              >
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleReset}
+                disabled={resetting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {resetting ? '초기화 중...' : '초기화 실행'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

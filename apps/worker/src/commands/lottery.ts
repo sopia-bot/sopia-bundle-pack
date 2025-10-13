@@ -1,5 +1,6 @@
 import { LiveSocket, User } from '@sopia-bot/core';
 import { LotteryManager } from '../managers/lottery-manager';
+import { FanscoreManager } from '../managers/fanscore-manager';
 import { FanscoreUser } from '../types/fanscore';
 
 const DOMAIN = 'starter-pack.sopia.dev';
@@ -90,7 +91,8 @@ export async function handleLottery(
  */
 export async function handleGiveLottery(
   args: string[],
-  context: { user: User; socket: LiveSocket; isAdmin: boolean; liveId: number }
+  context: { user: User; socket: LiveSocket; isAdmin: boolean; liveId: number },
+  fanscoreManager: FanscoreManager
 ): Promise<void> {
   const { user, socket, isAdmin, liveId } = context;
 
@@ -137,16 +139,10 @@ export async function handleGiveLottery(
         return;
       }
 
-      // 4. 필터링된 유저들에게 복권 지급
-      const promises = targetUsers.map(listener =>
-        fetch(`stp://${DOMAIN}/fanscore/user/${listener.id}/lottery`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ change: count })
-        })
-      );
-
-      await Promise.all(promises);
+      // 4. 필터링된 유저들에게 복권 지급 (pendingUpdates 사용)
+      for (const listener of targetUsers) {
+        fanscoreManager.updateLotteryTickets(listener.id, count, listener.nickname, listener.tag);
+      }
       
       await socket.message(`✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`);
       console.log(`[!복권지급 전체] ${user.nickname} gave ${count} lottery tickets to ${targetUsers.length} users in the room`);
@@ -165,12 +161,8 @@ export async function handleGiveLottery(
 
     const targetUser: FanscoreUser = await userResponse.json();
 
-    // 복권 지급
-    await fetch(`stp://${DOMAIN}/fanscore/user/${targetUser.user_id}/lottery`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ change: count })
-    });
+    // 복권 지급 (pendingUpdates 사용)
+    fanscoreManager.updateLotteryTickets(targetUser.user_id, count, targetUser.nickname, targetUser.tag);
 
     await socket.message(`✅ ${targetUser.nickname}님에게 복권 ${count}장을 지급했습니다.`);
     console.log(`[!복권지급] ${user.nickname} gave ${count} lottery tickets to ${targetUser.nickname}`);
@@ -185,7 +177,8 @@ export async function handleGiveLottery(
  */
 export async function handleTransferLottery(
   args: string[],
-  context: { user: User; socket: LiveSocket }
+  context: { user: User; socket: LiveSocket },
+  fanscoreManager: FanscoreManager
 ): Promise<void> {
   const { user, socket } = context;
 
@@ -235,19 +228,9 @@ export async function handleTransferLottery(
       return;
     }
 
-    // 복권 차감
-    await fetch(`stp://${DOMAIN}/fanscore/user/${user.id}/lottery`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ change: -count })
-    });
-
-    // 복권 지급
-    await fetch(`stp://${DOMAIN}/fanscore/user/${targetUser.user_id}/lottery`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ change: count })
-    });
+    // 복권 차감 및 지급 (pendingUpdates 사용)
+    fanscoreManager.updateLotteryTickets(user.id, -count, myProfile.nickname, myProfile.tag);
+    fanscoreManager.updateLotteryTickets(targetUser.user_id, count, targetUser.nickname, targetUser.tag);
 
     await socket.message(`✅ ${targetUser.nickname}님에게 복권 ${count}장을 양도했습니다.`);
     console.log(`[!복권양도] ${user.nickname} transferred ${count} lottery tickets to ${targetUser.nickname}`);

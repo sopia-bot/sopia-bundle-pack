@@ -411,4 +411,53 @@ router.put('/history/:recordId/use', async (req, res) => {
   }
 });
 
+// 룰렛 기록 초기화
+router.post('/history/reset', async (req, res) => {
+  try {
+    const { templateId } = req.body; // 'all' 또는 특정 template_id
+    
+    logger.debug('Resetting roulette history', { templateId });
+    
+    const data = await getDataFile('roulette-history');
+    let deletedCount = 0;
+    
+    let newData;
+    if (templateId === 'all') {
+      // 전체 초기화
+      deletedCount = data.length;
+      newData = [];
+    } else {
+      // 특정 템플릿만 초기화
+      newData = data.filter((record: any) => {
+        if (record.template_id === templateId) {
+          deletedCount++;
+          return false;
+        }
+        return true;
+      });
+    }
+    
+    await saveDataFile('roulette-history', newData);
+    
+    logger.info('Roulette history reset successfully', {
+      templateId,
+      deletedCount,
+      remainingCount: newData.length
+    });
+    
+    res.json({
+      success: true,
+      deletedCount,
+      remainingCount: newData.length
+    });
+  } catch (error: any) {
+    logger.error('Failed to reset roulette history', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined,
+      body: req.body
+    });
+    res.status(500).json({ error: 'Failed to reset roulette history' });
+  }
+});
+
 export default router;

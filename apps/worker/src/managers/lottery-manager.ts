@@ -94,12 +94,8 @@ export class LotteryManager {
         };
       }
 
-      // 티켓 소진
-      await fetch(`stp://${DOMAIN}/fanscore/user/${userId}/lottery`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ change: -1 })
-      });
+      // 티켓 소진 (pendingUpdates 사용)
+      this.fanscoreManager.updateLotteryTickets(userId, -1, user.nickname, user.tag);
 
       // 추첨
       const drawn = this.drawNumbers();
@@ -183,12 +179,8 @@ export class LotteryManager {
         matchCounts[matches as keyof typeof matchCounts]++;
       }
 
-      // 티켓 모두 소진
-      await fetch(`stp://${DOMAIN}/fanscore/user/${userId}/lottery`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ change: -ticketCount })
-      });
+      // 티켓 모두 소진 (pendingUpdates 사용)
+      this.fanscoreManager.updateLotteryTickets(userId, -ticketCount, user.nickname, user.tag);
 
       // 경험치 지급 (배치 업데이트 시스템 사용)
       if (totalReward > 0) {

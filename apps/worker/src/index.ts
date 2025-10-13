@@ -46,8 +46,8 @@ quizManager.initialize();
 // 복권 매니저 초기화 (fanscoreManager 주입)
 const lotteryManager = new LotteryManager(fanscoreManager);
 
-// 룰렛 매니저 초기화
-const rouletteManager = new RouletteManager();
+// 룰렛 매니저 초기화 (fanscoreManager 주입)
+const rouletteManager = new RouletteManager(fanscoreManager);
 rouletteManager.loadTemplates().then(() => {
     console.log('[Worker] Roulette manager initialized');
 });
@@ -76,8 +76,8 @@ commandRegistry.register('랭크', handleRanking);
 
 // 복권 명령어
 commandRegistry.register('복권', (args, context) => handleLottery(args, context, lotteryManager));
-commandRegistry.register('복권지급', (args, context) => handleGiveLottery(args, context as any));
-commandRegistry.register('복권양도', (args, context) => handleTransferLottery(args, context));
+commandRegistry.register('복권지급', (args, context) => handleGiveLottery(args, context as any, fanscoreManager));
+commandRegistry.register('복권양도', (args, context) => handleTransferLottery(args, context, fanscoreManager));
 
 // 룰렛 명령어
 commandRegistry.register('룰렛', (args, context) => handleRouletteCommand(args, context, rouletteManager));

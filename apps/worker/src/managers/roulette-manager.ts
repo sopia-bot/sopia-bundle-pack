@@ -7,6 +7,7 @@ import type {
   RouletteSpinResult, 
   RouletteResult 
 } from '../types/roulette';
+import type { FanscoreManager } from './fanscore-manager';
 
 const API_BASE = 'stp://starter-pack.sopia.dev';
 
@@ -18,8 +19,13 @@ const API_BASE = 'stp://starter-pack.sopia.dev';
  */
 export class RouletteManager {
   private templates: RouletteTemplate[] = [];
+  private fanscoreManager: FanscoreManager | null = null;
 
-  constructor() {}
+  constructor(fanscoreManager?: FanscoreManager) {
+    if (fanscoreManager) {
+      this.fanscoreManager = fanscoreManager;
+    }
+  }
 
   /**
    * 소켓
@@ -331,10 +337,15 @@ export class RouletteManager {
   }
 
   /**
-   * 복권 지급 (FanscoreManager와 동일한 방식)
+   * 복권 지급 (pendingUpdates 사용)
    */
   private async giveLotteryTickets(userId: number, count: number, reason: string): Promise<void> {
     try {
+      if (!this.fanscoreManager) {
+        console.error('[RouletteManager] FanscoreManager not available for lottery tickets');
+        return;
+      }
+
       // 사용자 정보 조회
       const userResponse = await fetch(`${API_BASE}/fanscore/user/${userId}`);
       if (!userResponse.ok) {
@@ -342,27 +353,17 @@ export class RouletteManager {
       }
       const userData = await userResponse.json();
       
-      // 복권 지급
-      const response = await fetch(`${API_BASE}/fanscore/user/${userId}/lottery`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ change: count })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to give lottery tickets: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const currentTickets = data.lottery_tickets;
+      // 복권 지급 (pendingUpdates 사용)
+      this.fanscoreManager.updateLotteryTickets(userId, count, userData.nickname, userData.tag);
+      const newTickets = (userData.lottery_tickets || 0) + count;
       
       // 채팅으로 알림
       if (this.socket) {
         const sign = count >= 0 ? '+' : '';
-        await this.socket.message(`[복권] ${userData.nickname}님, 복권이 ${sign}${count}개 지급되었습니다. (보유: ${currentTickets}개)`);
+        await this.socket.message(`[복권] ${userData.nickname}님, 복권이 ${sign}${count}개 지급되었습니다. (보유: ${newTickets}개)`);
       }
 
-      console.log('[RouletteManager] Lottery tickets given:', { userId, count, reason, currentTickets });
+      console.log('[RouletteManager] Lottery tickets scheduled:', { userId, count, reason, expectedTickets: newTickets });
     } catch (error: any) {
       console.error('[RouletteManager] Failed to give lottery tickets:', error?.message);
     }
