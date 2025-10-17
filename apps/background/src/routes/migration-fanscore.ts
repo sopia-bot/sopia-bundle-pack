@@ -144,16 +144,26 @@ router.get('/preview', async (req, res) => {
         quiz_bonus: parseInt(oldConfig.options.quiz_point) || 10,
       },
       quizzes: oldConfig.list || [],
-      users: oldData.user_info.map(user => ({
-        nickname: user.nickname,
-        tag: user.tag,
-        score: safeIntData(user.point),
-        exp: safeIntData(user.point),
-        chat_count: safeIntData(user.chat_count, 0),
-        like_count: safeIntData(user.heart_count, 0),
-        spoon_count: safeIntData((user.spoon && user.spoon.length > 0) ? user.spoon[0] : 0),
-        lottery_tickets: safeIntData((user.spoon && user.spoon.length > 2) ? user.spoon[2] : 0),
-      }))
+      users: oldData.user_info.map(user => {
+        const level = safeIntData(user.level, 0);
+        const point = safeIntData(user.point, 0);
+        
+        // 레벨 시스템 역산: 총 경험치 계산
+        // 레벨 L에 도달하는데 필요한 총 경험치: 100 * (L+1) * (L+1) / 2
+        // 현재 레벨 L, 남은 포인트 P일 때 총 exp = 100 * (L+1) * (L+1) / 2 + P
+        const totalExp = (100 * (level + 1) * (level + 1) / 2) + point;
+
+        return {
+          nickname: user.nickname,
+          tag: user.tag,
+          score: totalExp,
+          exp: totalExp,
+          chat_count: safeIntData(user.chat_count, 0),
+          like_count: safeIntData(user.heart_count, 0),
+          spoon_count: safeIntData((user.spoon && user.spoon.length > 0) ? user.spoon[0] : 0),
+          lottery_tickets: safeIntData((user.spoon && user.spoon.length > 2) ? user.spoon[2] : 0),
+        };
+      })
     };
 
     logger.info('Migration preview completed', {

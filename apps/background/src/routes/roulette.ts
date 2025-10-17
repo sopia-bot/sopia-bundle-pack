@@ -418,37 +418,63 @@ router.post('/history/reset', async (req, res) => {
     
     logger.debug('Resetting roulette history', { templateId });
     
-    const data = await getDataFile('roulette-history');
+    const historyData = await getDataFile('roulette-history');
+    const rouletteData = await getDataFile('roulette');
     let deletedCount = 0;
     
-    let newData;
+    let newHistoryData;
     if (templateId === 'all') {
       // 전체 초기화
-      deletedCount = data.length;
-      newData = [];
+      deletedCount = historyData.length;
+      newHistoryData = [];
+      
+      // tickets와 keepItems도 전체 초기화
+      rouletteData.tickets = [];
+      rouletteData.keepItems = [];
+      
+      logger.info('Resetting all tickets and keepItems');
     } else {
       // 특정 템플릿만 초기화
-      newData = data.filter((record: any) => {
+      newHistoryData = historyData.filter((record: any) => {
         if (record.template_id === templateId) {
           deletedCount++;
           return false;
         }
         return true;
       });
+      
+      // 특정 템플릿의 tickets 삭제
+      rouletteData.tickets.forEach((userTickets: any) => {
+        if (userTickets.tickets && userTickets.tickets[templateId]) {
+          delete userTickets.tickets[templateId];
+        }
+      });
+      
+      // 특정 템플릿의 keepItems 삭제
+      rouletteData.keepItems.forEach((userKeepItems: any) => {
+        if (userKeepItems.items) {
+          userKeepItems.items = userKeepItems.items.filter((item: any) => 
+            item.template_id !== templateId
+          );
+        }
+      });
+      
+      logger.info('Resetting tickets and keepItems for template', { templateId });
     }
     
-    await saveDataFile('roulette-history', newData);
+    await saveDataFile('roulette-history', newHistoryData);
+    await saveDataFile('roulette', rouletteData);
     
     logger.info('Roulette history reset successfully', {
       templateId,
       deletedCount,
-      remainingCount: newData.length
+      remainingCount: newHistoryData.length
     });
     
     res.json({
       success: true,
       deletedCount,
-      remainingCount: newData.length
+      remainingCount: newHistoryData.length
     });
   } catch (error: any) {
     logger.error('Failed to reset roulette history', {

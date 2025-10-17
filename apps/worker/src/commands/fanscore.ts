@@ -110,11 +110,11 @@ export async function handleViewProfile(
       // 룰렛 티켓 조회 실패 시에도 나머지 정보는 표시
     }
 
+    const progress = (profile.level + (levelInfo.currentExp / levelInfo.requiredExp)).toFixed(2);
     const message = 
-      `📊 ${profile.nickname}님의 정보\\n\\n` +
+      `📊 ${profile.nickname.replace(/‮/g, '')}님의 정보\\n\\n` +
       `🏆 순위: ${profile.rank}위\\n` +
-      `⭐ 레벨: Lv.${profile.level} (${(levelInfo.currentExp).toFixed(1)}/${levelInfo.requiredExp})\\n` +
-      `💯 애청지수: ${profile.score.toFixed(1)}점\\n` +
+      `⭐ 레벨: Lv.${progress}\\n` +
       `💬 채팅: ${profile.chat_count}회\\n` +
       `❤️ 좋아요: ${profile.like_count}회\\n` +
       `🥄 스푼: ${profile.spoon_count}개\\n` +
@@ -285,11 +285,14 @@ export async function handleRanking(
     
     top5.forEach((user, index) => {
       const medal = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][index];
-      message += `${medal} ${user.nickname} - Lv.${user.level} (${user.score}점)\\n`;
+      // 레벨 진행률 계산 (0~1 사이)
+      const levelInfo = calculateLevel(user.exp);
+      const progress = (user.level + (levelInfo.currentExp / levelInfo.requiredExp)).toFixed(2);
+      message += `${medal} ${user.nickname.replace(/‮/g, '')} - Lv.${progress}\\n`;
     });
 
-    message += `\\n💬 채팅왕: ${chatKing.nickname} (${chatKing.chat_count}회)`;
-    message += `\\n❤️ 하트왕: ${likeKing.nickname} (${likeKing.like_count}회)`;
+    message += `\\n💬 채팅왕: ${chatKing.nickname.replace(/‮/g, '')} - (${chatKing.chat_count}회)`;
+    message += `\\n❤️ 하트왕: ${likeKing.nickname.replace(/‮/g, '')} - (${likeKing.like_count}회)`;
 
     await socket.message(message);
     console.log('[!랭크] Ranking displayed');

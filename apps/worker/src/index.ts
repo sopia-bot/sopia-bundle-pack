@@ -60,6 +60,10 @@ commandRegistry.register('실드', handleShieldCommand);
 
 // 애청지수 명령어
 commandRegistry.register('내정보', async (args, context) => {
+    // 애청지수 번들이 비활성화되어 있으면 명령어 무시
+    if (!config || !config.enabled) {
+        return;
+    }
     if (args.length === 0) {
         await handleViewProfile(args, context, fanscoreManager);
     } else if (args[0] === '생성') {
@@ -70,14 +74,32 @@ commandRegistry.register('내정보', async (args, context) => {
         await handleViewProfile(args, context, fanscoreManager);
     }
 });
-commandRegistry.register('상점', (args, context) => handleAddScore(args, context, fanscoreManager));
-commandRegistry.register('감점', (args, context) => handleSubtractScore(args, context, fanscoreManager));
-commandRegistry.register('랭크', handleRanking);
+commandRegistry.register('상점', async (args, context) => {
+    if (!config || !config.enabled) return;
+    await handleAddScore(args, context, fanscoreManager);
+});
+commandRegistry.register('감점', async (args, context) => {
+    if (!config || !config.enabled) return;
+    await handleSubtractScore(args, context, fanscoreManager);
+});
+commandRegistry.register('랭크', async (args, context) => {
+    if (!config || !config.enabled) return;
+    await handleRanking(args, context);
+});
 
 // 복권 명령어
-commandRegistry.register('복권', (args, context) => handleLottery(args, context, lotteryManager));
-commandRegistry.register('복권지급', (args, context) => handleGiveLottery(args, context as any, fanscoreManager));
-commandRegistry.register('복권양도', (args, context) => handleTransferLottery(args, context, fanscoreManager));
+commandRegistry.register('복권', async (args, context) => {
+    if (!config || !config.enabled) return;
+    await handleLottery(args, context, lotteryManager);
+});
+commandRegistry.register('복권지급', async (args, context) => {
+    if (!config || !config.enabled) return;
+    await handleGiveLottery(args, context as any, fanscoreManager);
+});
+commandRegistry.register('복권양도', async (args, context) => {
+    if (!config || !config.enabled) return;
+    await handleTransferLottery(args, context, fanscoreManager);
+});
 
 // 룰렛 명령어
 commandRegistry.register('룰렛', (args, context) => handleRouletteCommand(args, context, rouletteManager));
