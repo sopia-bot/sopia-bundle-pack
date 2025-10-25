@@ -85,6 +85,22 @@ export class FanscoreManager {
   }
 
   /**
+   * 사용자 캐시 업데이트 (외부에서 호출)
+   */
+  updateUserCache(userId: number, updates: Partial<FanscoreUser>): void {
+    const cachedUser = this.userCache.get(userId);
+    if (cachedUser) {
+      this.userCache.set(userId, {
+        ...cachedUser,
+        ...updates
+      });
+      console.log(`[FanscoreManager] User cache updated for ${userId}:`, updates);
+    } else {
+      console.warn(`[FanscoreManager] User ${userId} not found in cache, skipping update`);
+    }
+  }
+
+  /**
    * 출석 체크 (채팅 시 자동)
    */
   async checkAttendance(user: User): Promise<boolean> {

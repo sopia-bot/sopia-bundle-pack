@@ -12,8 +12,10 @@ import { FanscoreManager } from './managers/fanscore-manager';
 import { QuizManager } from './managers/quiz-manager';
 import { LotteryManager } from './managers/lottery-manager';
 import { RouletteManager } from './managers/roulette-manager';
+import { YachtManager } from './managers/yacht-manager';
 import { FanscoreConfig } from './types/fanscore';
 import type { RouletteTemplate } from './types/roulette';
+import { handleYachtStatus, handleYachtGuide, handleYachtHands, handleYachtRoll, handleYachtDecide } from './commands/yacht';
 
 const { ipcRenderer } = window.require('electron');
 
@@ -51,6 +53,11 @@ const rouletteManager = new RouletteManager(fanscoreManager);
 rouletteManager.loadTemplates().then(() => {
     console.log('[Worker] Roulette manager initialized');
 });
+
+// 야추 매니저 초기화
+const yachtManager = new YachtManager(fanscoreManager);
+yachtManager.loadConfig();
+(window as any).yachtManager = yachtManager;
 
 // 명령어 레지스트리 초기화
 const commandRegistry = new CommandRegistry();
@@ -108,6 +115,23 @@ commandRegistry.register('사용', (args, context) => handleUseCommand(args, con
 
 // 사용자 정보 명령어
 commandRegistry.register('고유닉', handleShowTag);
+
+// 야추 명령어
+commandRegistry.register('야추', async (args, context) => {
+    if (args.length === 0) {
+        await handleYachtStatus(context, yachtManager);
+    } else if (args[0] === '설명') {
+        await handleYachtGuide(context, yachtManager);
+    } else if (args[0] === '족보') {
+        await handleYachtHands(context);
+    } else if (args[0] === '굴리기') {
+        await handleYachtRoll(args.slice(1), context, yachtManager);
+    } else if (args[0] === '결정') {
+        await handleYachtDecide(context, yachtManager);
+    } else {
+        await handleYachtStatus(context, yachtManager);
+    }
+});
 
 // 디버깅 명령어
 commandRegistry.register('설정', async (args, context) => {
@@ -372,16 +396,27 @@ function backgroundListener(event: any, data: { channel: string; data?: any }): 
                 console.log('[Worker] Templates refreshed');
             });
             break;
+        case 'lottery-updated':
+            // 복권 업데이트 시 캐시 동기화
+            if (data.data && data.data.userId && typeof data.data.lottery_tickets === 'number') {
+                fanscoreManager.updateUserCache(data.data.userId, { lottery_tickets: data.data.lottery_tickets });
+                console.log(`[Worker] Lottery cache updated for user ${data.data.userId}: ${data.data.lottery_tickets} tickets`);
+            }
+            break;
         case 'send-chat-message':
             // 채팅 메시지 전송 요청
             if (data.data && data.data.message) {
                 const socket = (window as any).$sopia?.liveMap?.values().next().value?.socket as LiveSocket;
                 if (socket) {
-                    socket.message(data.data.message).catch((error: any) => {
-                        console.error('[Worker] Failed to send chat message:', error);
-                    });
+                    socket.message(data.data.message);
+                    console.log('[Worker] Chat message sent', data.data.message);
                 }
             }
+            break;
+        case 'yacht-cooldown-clear':
+            // 야추 쿨타임 초기화
+            yachtManager.clearAllCooldowns();
+            console.log('[Worker] Yacht player cooldowns cleared');
             break;
     }
 }

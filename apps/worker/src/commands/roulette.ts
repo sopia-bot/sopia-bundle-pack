@@ -285,7 +285,39 @@ export async function handleKeepCommand(
       lines.push(`${index + 1}. ${item.label} x${item.count}`);
     });
 
-    await socket.message(lines.join('\\n'));
+    // 200글자 제한에 맞춰서 메시지 분할
+    const MAX_MESSAGE_LENGTH = 200;
+    let currentMessage = '';
+    const messages: string[] = [];
+
+    for (const line of lines) {
+      const testMessage = currentMessage ? `${currentMessage}\\n${line}` : line;
+
+      if (testMessage.length > MAX_MESSAGE_LENGTH) {
+        // 현재 메시지를 저장하고 새 메시지 시작
+        if (currentMessage) {
+          messages.push(currentMessage);
+        }
+        currentMessage = line;
+      } else {
+        currentMessage = testMessage;
+      }
+    }
+
+    // 마지막 메시지 추가
+    if (currentMessage) {
+      messages.push(currentMessage);
+    }
+
+    // 메시지 전송 (500ms 텀)
+    for (let i = 0; i < messages.length; i++) {
+      await socket.message(messages[i]);
+
+      // 마지막 메시지가 아니면 500ms 대기
+      if (i < messages.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
   } catch (error: any) {
     console.error('[RouletteCommand] Error in handleKeepCommand:', error?.message);
     await socket.message('킵 목록 조회 중 오류가 발생했습니다.');

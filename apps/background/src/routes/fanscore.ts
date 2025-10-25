@@ -327,6 +327,33 @@ router.put('/user/:userId/lottery', async (req, res) => {
       change
     });
     
+    // Worker에 복권 업데이트 알림
+    try {
+      const { BrowserWindow } = require('electron');
+      const window = BrowserWindow.getAllWindows()[0];
+      if (window) {
+        window.webContents.send('starter-pack.sopia.dev', {
+          channel: 'lottery-updated',
+          data: {
+            userId: parseInt(userId),
+            lottery_tickets: data[userIndex].lottery_tickets
+          }
+        });
+        window.webContents.send('starter-pack.sopia.dev', {
+          channel: 'send-chat-message',
+          data: {
+            userId: parseInt(userId),
+            message: `[복권] ${data[userIndex].nickname}님, 복권이 ${change}개 지급되었습니다. (보유: ${data[userIndex].lottery_tickets}개)`
+          }
+        });
+        logger.debug('Worker notified of lottery update', { userId });
+      }
+    } catch (notifyError: any) {
+      logger.warn('Failed to notify worker of lottery update', {
+        error: notifyError?.message || 'Unknown error'
+      });
+    }
+    
     res.json(data[userIndex]);
   } catch (error: any) {
     logger.error('Failed to update lottery tickets', {

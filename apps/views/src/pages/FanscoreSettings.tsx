@@ -25,6 +25,13 @@ interface FanscoreConfig {
   lottery_spoon_required: number;
 }
 
+interface YachtConfig {
+  enabled: boolean;
+  winning_score: number;
+  score_multiplier: number;
+  game_cooldown: number;
+}
+
 interface Quiz {
   id: string;
   question: string;
@@ -54,11 +61,20 @@ export function FanscoreSettings() {
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
   const [newQuiz, setNewQuiz] = useState({ question: '', answer: '' });
   const [isMigrationDialogOpen, setIsMigrationDialogOpen] = useState(false);
+  const [yachtConfig, setYachtConfig] = useState<YachtConfig>({
+    enabled: true,
+    winning_score: 50,
+    score_multiplier: 100,
+    game_cooldown: 60,
+  });
+  const [yachtSaved, setYachtSaved] = useState(false);
+  const [clearingCooldown, setClearingCooldown] = useState(false);
 
   useEffect(() => {
     // 설정 불러오기
     loadConfig();
     loadQuizzes();
+    loadYachtConfig();
   }, []);
 
   const loadConfig = async () => {
@@ -81,6 +97,17 @@ export function FanscoreSettings() {
       console.error('Failed to load quizzes:', error);
       toast.error('퀴즈 목록을 불러오는데 실패했습니다.');
       setQuizzes([]); // 에러 시 빈 배열로 설정
+    }
+  };
+
+  const loadYachtConfig = async () => {
+    try {
+      const response = await fetch('stp://starter-pack.sopia.dev/yacht/config');
+      const data = await response.json();
+      setYachtConfig(data);
+    } catch (error) {
+      console.error('Failed to load yacht config:', error);
+      toast.error('야추 설정을 불러오는데 실패했습니다.');
     }
   };
 
@@ -235,6 +262,61 @@ export function FanscoreSettings() {
     // 마이그레이션 완료 후 데이터 다시 로드
     loadConfig();
     loadQuizzes();
+  };
+
+  const clearYachtCooldowns = async () => {
+    try {
+      setClearingCooldown(true);
+      const response = await fetch('stp://starter-pack.sopia.dev/yacht/cooldown/clear', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        toast.success('모든 플레이어의 야추 쿨타임이 초기화되었습니다.');
+      } else {
+        throw new Error('Failed to clear cooldowns');
+      }
+    } catch (error) {
+      console.error('Failed to clear yacht cooldowns:', error);
+      toast.error('쿨타임 초기화에 실패했습니다.');
+    } finally {
+      setClearingCooldown(false);
+    }
+  };
+
+  const saveYachtConfig = async () => {
+    const validatedConfig = { ...yachtConfig };
+    
+    if (isNaN(validatedConfig.winning_score) || validatedConfig.winning_score < 1) {
+      validatedConfig.winning_score = 50;
+      toast.warning('승리 점수가 유효하지 않아 기본값(50점)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.score_multiplier) || validatedConfig.score_multiplier < 1) {
+      validatedConfig.score_multiplier = 100;
+      toast.warning('점수 배수가 유효하지 않아 기본값(100)으로 설정되었습니다.');
+    }
+    
+    if (isNaN(validatedConfig.game_cooldown) || validatedConfig.game_cooldown < 1) {
+      validatedConfig.game_cooldown = 60;
+      toast.warning('게임 간격이 유효하지 않아 기본값(60초)으로 설정되었습니다.');
+    }
+    
+    try {
+      await fetch('stp://starter-pack.sopia.dev/yacht/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validatedConfig),
+      });
+
+      setYachtConfig(validatedConfig);
+      setYachtSaved(true);
+      toast.success('야추 설정이 저장되었습니다.');
+      setTimeout(() => setYachtSaved(false), 3000);
+    } catch (error) {
+      console.error('Failed to save yacht config:', error);
+      toast.error('야추 설정 저장에 실패했습니다.');
+    }
   };
 
   return (
@@ -610,6 +692,203 @@ export function FanscoreSettings() {
               </div>
             </CardContent>
           )}
+        </Card>
+
+        {/* Yacht Game Feature */}
+        <Card className="border shadow-lg bg-gradient-to-br from-orange-50 to-orange-100">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-xl font-bold flex items-center gap-2 text-gray-900">
+                  <div className="p-2 rounded-lg bg-orange-500/10">
+                    🎲
+                  </div>
+                  야추 게임
+                </CardTitle>
+                <CardDescription className="text-gray-600">주사위 5개를 굴려 족보를 완성하는 게임입니다</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={saveYachtConfig}
+                  className={yachtSaved ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'}
+                  size="sm"
+                >
+                  <Save size={16} className="mr-1" />
+                  {yachtSaved ? '저장됨' : '저장'}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Enable/Disable */}
+            <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-orange-200">
+              <div>
+                <p className="font-medium text-gray-900">게임 활성화</p>
+                <p className="text-sm text-gray-600">야추 게임을 활성화하거나 비활성화합니다</p>
+              </div>
+              <Switch
+                checked={yachtConfig.enabled}
+                onCheckedChange={(checked) => setYachtConfig({ ...yachtConfig, enabled: checked })}
+                className="data-[state=checked]:bg-orange-600"
+              />
+            </div>
+
+            {yachtConfig.enabled && (
+              <>
+                {/* Winning Score */}
+                <div className="space-y-3">
+                  <Label htmlFor="winning-score" className="text-base font-medium text-gray-900">승리 점수</Label>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      id="winning-score"
+                      type="number"
+                      min="1"
+                      value={yachtConfig.winning_score}
+                      onChange={(e) => setYachtConfig({ ...yachtConfig, winning_score: e.target.value === '' ? '' as any : parseInt(e.target.value) })}
+                      className="flex-1"
+                    />
+                    <span className="text-gray-500 text-sm font-medium">점</span>
+                  </div>
+                  <p className="text-gray-500 text-sm">이 점수 이상의 족보를 완성하면 애청지수 포인트를 획득합니다</p>
+                </div>
+
+                {/* Score Multiplier */}
+                <div className="space-y-3">
+                  <Label htmlFor="score-multiplier" className="text-base font-medium text-gray-900">점수 배수</Label>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      id="score-multiplier"
+                      type="number"
+                      min="1"
+                      value={yachtConfig.score_multiplier}
+                      onChange={(e) => setYachtConfig({ ...yachtConfig, score_multiplier: e.target.value === '' ? '' as any : parseInt(e.target.value) })}
+                      className="flex-1"
+                    />
+                    <span className="text-gray-500 text-sm font-medium">배</span>
+                  </div>
+                  <p className="text-gray-500 text-sm">족보 점수에 이 배수를 곱하여 최종 애청지수 포인트를 계산합니다</p>
+                </div>
+
+                {/* Game Cooldown */}
+                <div className="space-y-3">
+                  <Label htmlFor="game-cooldown" className="text-base font-medium text-gray-900">게임 간격</Label>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      id="game-cooldown"
+                      type="number"
+                      min="1"
+                      value={yachtConfig.game_cooldown}
+                      onChange={(e) => setYachtConfig({ ...yachtConfig, game_cooldown: e.target.value === '' ? '' as any : parseInt(e.target.value) })}
+                      className="flex-1"
+                    />
+                    <span className="text-gray-500 text-sm font-medium">초</span>
+                  </div>
+                  <p className="text-gray-500 text-sm">한 사용자가 다시 게임을 시작하기 전에 기다려야 하는 시간</p>
+                </div>
+
+                {/* Yacht Hands Table */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-medium text-gray-900">족보 점수표</Label>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50">
+                          ⏱️ 쿨타임 초기화
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>야추 쿨타임 초기화</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            모든 플레이어의 야추 게임 쿨타임을 초기화하시겠습니까?
+                            이 작업은 즉시 모든 사용자가 다시 게임을 시작할 수 있게 합니다.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>취소</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={clearYachtCooldowns}
+                            disabled={clearingCooldown}
+                            className="bg-orange-600 hover:bg-orange-700"
+                          >
+                            {clearingCooldown ? '초기화 중...' : '초기화'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  <div className="bg-white rounded-lg border border-orange-200 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-orange-50 border-b border-orange-200">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-medium text-gray-900 w-24">족보</th>
+                          <th className="px-4 py-2 text-left font-medium text-gray-900 flex-1">설명</th>
+                          <th className="px-4 py-2 text-center font-medium text-gray-900 w-20">예시</th>
+                          <th className="px-4 py-2 text-right font-medium text-gray-900 w-16">점수</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-orange-200">
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">탑</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">동일한 주사위 눈이 없을 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚀⚁⚂⚃⚄</td>
+                          <td className="px-4 py-2 text-right text-gray-700">10점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">원페어</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">동일한 주사위 눈이 2개인 눈 종류가 1개일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚁⚁⚂⚄⚅</td>
+                          <td className="px-4 py-2 text-right text-gray-700">20점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">투페어</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">동일한 주사위 눈이 2개인 눈 종류가 2개일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚁⚁⚂⚂⚅</td>
+                          <td className="px-4 py-2 text-right text-gray-700">30점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">트리플</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">동일한 주사위 눈이 3개일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚁⚁⚁⚄⚅</td>
+                          <td className="px-4 py-2 text-right text-gray-700">40점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">포카드</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">동일한 주사위 눈이 4개일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚄⚅⚅⚅⚅</td>
+                          <td className="px-4 py-2 text-right text-gray-700">50점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">풀 하우스</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">한 종류가 3개, 다른 종류가 2개일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚄⚄⚅⚅⚅</td>
+                          <td className="px-4 py-2 text-right text-gray-700">60점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">리틀 스트레이트</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">주사위 눈이 1, 2, 3, 4, 5일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚀⚁⚂⚃⚄</td>
+                          <td className="px-4 py-2 text-right text-gray-700">70점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50">
+                          <td className="px-4 py-2 text-gray-700 font-medium">빅 스트레이트</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">주사위 눈이 2, 3, 4, 5, 6일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚁⚂⚃⚄⚅</td>
+                          <td className="px-4 py-2 text-right text-gray-700">70점</td>
+                        </tr>
+                        <tr className="hover:bg-orange-50 bg-orange-100">
+                          <td className="px-4 py-2 text-gray-900 font-medium">야추</td>
+                          <td className="px-4 py-2 text-gray-700 font-medium text-xs">동일한 주사위 눈이 5개일 때</td>
+                          <td className="px-4 py-2 text-center text-lg">⚀⚀⚀⚀⚀</td>
+                          <td className="px-4 py-2 text-right text-gray-900 font-medium">150점</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
         </Card>
 
         {/* Info Box */}

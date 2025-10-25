@@ -93,6 +93,22 @@ export function UserManagement() {
   const [ticketCount, setTicketCount] = useState<string>('1');
   const [grantingTicket, setGrantingTicket] = useState(false);
   
+  // Lottery grant dialog states
+  const [lotteryDialogOpen, setLotteryDialogOpen] = useState(false);
+  const [selectedUserForLottery, setSelectedUserForLottery] = useState<UserData | null>(null);
+  const [lotteryCount, setLotteryCount] = useState<string>('1');
+  const [grantingLottery, setGrantingLottery] = useState(false);
+  
+  // Roulette record dialog states
+  const [rouletteRecordDialogOpen, setRouletteRecordDialogOpen] = useState(false);
+  const [selectedUserForRecord, setSelectedUserForRecord] = useState<UserData | null>(null);
+  const [selectedTemplateForRecord, setSelectedTemplateForRecord] = useState<string>('');
+  const [selectedItemIndex, setSelectedItemIndex] = useState<string>('');
+  const [selectedItemCount, setSelectedItemCount] = useState<string>('1');
+  const [templateItems, setTemplateItems] = useState<any[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [addingRecord, setAddingRecord] = useState(false);
+  
   // Reset dialog states
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetCategories, setResetCategories] = useState({
@@ -190,6 +206,188 @@ export function UserManagement() {
       toast.error('티켓 지급에 실패했습니다.');
     } finally {
       setGrantingTicket(false);
+    }
+  };
+
+  const openLotteryDialog = (user: UserData) => {
+    setSelectedUserForLottery(user);
+    setLotteryCount('1');
+    setLotteryDialogOpen(true);
+  };
+
+  const grantLottery = async () => {
+    if (!selectedUserForLottery || !lotteryCount) {
+      toast.error('모든 필드를 입력해주세요.');
+      return;
+    }
+
+    const count = parseInt(lotteryCount);
+    if (isNaN(count) || count === 0) {
+      toast.error('0이 아닌 숫자를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setGrantingLottery(true);
+
+      const response = await fetch(`stp://starter-pack.sopia.dev/fanscore/user/${selectedUserForLottery.user_id}/lottery`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          change: count,
+        }),
+      });
+
+      if (response.ok) {
+        const action = count > 0 ? '지급' : '차감';
+        toast.success(`${selectedUserForLottery.nickname}님의 복권을 ${Math.abs(count)}장 ${action}했습니다.`);
+        setLotteryDialogOpen(false);
+        setSelectedUserForLottery(null);
+        fetchUsers(); // 목록 새로고침
+      } else {
+        throw new Error('Failed to grant lottery');
+      }
+    } catch (error) {
+      console.error('Failed to grant lottery:', error);
+      toast.error('복권 지급에 실패했습니다.');
+    } finally {
+      setGrantingLottery(false);
+    }
+  };
+
+  const openRouletteRecordDialog = (user: UserData) => {
+    setSelectedUserForRecord(user);
+    setSelectedTemplateForRecord('');
+    setSelectedItemIndex('');
+    setSelectedItemCount('1');
+    setTemplateItems([]);
+    setRouletteRecordDialogOpen(true);
+  };
+
+  const handleTemplateChange = async (templateId: string) => {
+    setSelectedTemplateForRecord(templateId);
+    setSelectedItemIndex('');
+    setSelectedItemCount('1');
+    setTemplateItems([]);
+
+    if (!templateId) return;
+
+    try {
+      setLoadingItems(true);
+      const response = await fetch(`stp://starter-pack.sopia.dev/templates/${templateId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch template details');
+      }
+      const templateData = await response.json();
+      setTemplateItems(templateData.items || []);
+    } catch (error) {
+      console.error('Failed to fetch template items:', error);
+      toast.error('템플릿 아이템을 불러오는데 실패했습니다.');
+      setTemplateItems([]);
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  // 문자열 자르기 함수
+  const truncateText = (text: string, maxLength: number = 30): string => {
+    return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+  };
+
+  const addRouletteRecord = async () => {
+    if (!selectedUserForRecord || !selectedTemplateForRecord || selectedItemIndex === '') {
+      toast.error('모든 필드를 입력해주세요.');
+      return;
+    }
+
+    const itemIndex = parseInt(selectedItemIndex);
+    if (isNaN(itemIndex) || itemIndex < 0 || itemIndex >= templateItems.length) {
+      toast.error('올바른 아이템을 선택해주세요.');
+      return;
+    }
+
+    const count = parseInt(selectedItemCount);
+    if (isNaN(count) || count <= 0) {
+      toast.error('1 이상의 개수를 입력해주세요.');
+      return;
+    }
+
+    try {
+      setAddingRecord(true);
+      
+      const selectedItem = templateItems[itemIndex];
+      let addedCount = 0;
+
+      // 선택한 개수만큼 룰렛 기록 추가
+      for (let i = 0; i < count; i++) {
+        try {
+          const response = await fetch('stp://starter-pack.sopia.dev/roulette/history', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id: `roulette-manual-${Date.now()}-${i}`,
+              template_id: selectedTemplateForRecord,
+              user_id: selectedUserForRecord.user_id,
+              nickname: selectedUserForRecord.nickname,
+              item: selectedItem,
+              used: false,
+              timestamp: new Date().toISOString(),
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to add roulette record');
+          }
+          addedCount++;
+        } catch (error) {
+          console.error(`Failed to add roulette record ${i + 1}/${count}:`, error);
+        }
+      }
+
+      // 킵 아이템 추가 (총 개수만큼)
+      try {
+        const keepResponse = await fetch(`stp://starter-pack.sopia.dev/roulette/keep-items/${selectedUserForRecord.user_id}/add`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            item: {
+              label: selectedItem.label,
+              template_id: selectedTemplateForRecord,
+              type: selectedItem.type,
+              percentage: selectedItem.percentage,
+              count: addedCount,
+            },
+            nickname: selectedUserForRecord.nickname,
+            tag: selectedUserForRecord.tag,
+          }),
+        });
+
+        if (!keepResponse.ok) {
+          console.warn('Failed to add keep item, but roulette records were added');
+        }
+      } catch (keepError) {
+        console.warn('Failed to add keep item:', keepError);
+        // 킵 아이템 추가 실패해도 룰렛 기록은 추가되었으므로 계속 진행
+      }
+
+      if (addedCount > 0) {
+        toast.success(`${selectedUserForRecord.nickname}님의 룰렛 당첨 기록 ${addedCount}개가 추가되었습니다.`);
+        setRouletteRecordDialogOpen(false);
+        setSelectedUserForRecord(null);
+      } else {
+        toast.error('당첨 기록 추가에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('Failed to add roulette records:', error);
+      toast.error('당첨 기록 추가 중 오류가 발생했습니다.');
+    } finally {
+      setAddingRecord(false);
     }
   };
 
@@ -531,7 +729,7 @@ export function UserManagement() {
       header: () => <div className="text-center">작업</div>,
       cell: ({ row }) => {
         return (
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -539,7 +737,25 @@ export function UserManagement() {
               className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
             >
               <Ticket className="h-4 w-4 mr-1" />
-              티켓 지급
+              티켓
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openLotteryDialog(row.original)}
+              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+            >
+              <Award className="h-4 w-4 mr-1" />
+              복권
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openRouletteRecordDialog(row.original)}
+              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+            >
+              <Trophy className="h-4 w-4 mr-1" />
+              당첨
             </Button>
           </div>
         );
@@ -994,6 +1210,227 @@ export function UserManagement() {
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 {grantingTicket ? '지급 중...' : '티켓 지급'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Lottery Grant Dialog */}
+        <Dialog open={lotteryDialogOpen} onOpenChange={setLotteryDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold text-gray-900">복권 지급</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                {selectedUserForLottery && (
+                  <span>
+                    <span className="font-semibold text-gray-900">{selectedUserForLottery.nickname}</span>님에게 복권을 지급하거나 차감합니다
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Lottery Count */}
+              <div>
+                <Label htmlFor="lottery-count" className="text-gray-900 font-medium">복권 개수</Label>
+                <Input
+                  id="lottery-count"
+                  type="number"
+                  value={lotteryCount}
+                  onChange={(e) => setLotteryCount(e.target.value)}
+                  placeholder="지급할 복권 개수 (음수 입력 시 차감)"
+                  className="mt-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  양수: 복권 지급 | 음수: 복권 차감 (예: -5는 5장 차감)
+                </p>
+              </div>
+
+              {/* User Info Card */}
+              {selectedUserForLottery && (
+                <Card className="border border-amber-200 bg-amber-50/50">
+                  <CardContent className="p-4">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">닉네임:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForLottery.nickname}</span>
+                      </div>
+                      {selectedUserForLottery.tag && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">고유닉:</span>
+                          <span className="font-mono text-gray-900">@{selectedUserForLottery.tag}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">현재 복권:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForLottery.lottery_tickets || 0}장</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Notice */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  💡 복권 개수 변경은 즉시 반영됩니다
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setLotteryDialogOpen(false)}
+                disabled={grantingLottery}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={grantLottery}
+                disabled={grantingLottery || !lotteryCount}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {grantingLottery ? '처리 중...' : '복권 지급'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Roulette Record Dialog */}
+        <Dialog open={rouletteRecordDialogOpen} onOpenChange={setRouletteRecordDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold text-gray-900">당첨 기록 추가</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                {selectedUserForRecord && (
+                  <span>
+                    <span className="font-semibold text-gray-900">{selectedUserForRecord.nickname}</span>님의 룰렛 당첨 기록을 수동으로 추가합니다
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Template Selection */}
+              <div>
+                <Label htmlFor="template-record" className="text-gray-900 font-medium">룰렛 템플릿 선택</Label>
+                <Select value={selectedTemplateForRecord} onValueChange={handleTemplateChange}>
+                  <SelectTrigger className="w-full mt-2">
+                    <SelectValue placeholder="템플릿을 선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template, index) => (
+                      <SelectItem key={template.template_id} value={template.template_id}>
+                        #{index + 1} {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Item Selection */}
+              {selectedTemplateForRecord && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="item-select" className="text-gray-900 font-medium">당첨 아이템 선택</Label>
+                    {loadingItems ? (
+                      <div className="mt-2 p-3 text-center text-gray-500">
+                        아이템 목록을 불러오는 중...
+                      </div>
+                    ) : templateItems.length > 0 ? (
+                      <Select value={selectedItemIndex} onValueChange={setSelectedItemIndex}>
+                        <SelectTrigger className="w-full mt-2">
+                          <SelectValue placeholder="아이템을 선택하세요" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templateItems.map((item, index) => (
+                            <SelectItem key={index} value={index.toString()}>
+                              <div className="flex items-center gap-2">
+                                <span className="truncate max-w-xs">{truncateText(item.label, 25)}</span>
+                                <span className="text-gray-500">({item.percentage}%)</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="mt-2 p-3 text-center text-gray-500 border rounded-md">
+                        템플릿에 아이템이 없습니다
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      템플릿의 아이템 목록에서 당첨시킬 아이템을 선택하세요
+                    </p>
+                  </div>
+
+                  {/* Item Count */}
+                  {selectedItemIndex && (
+                    <div>
+                      <Label htmlFor="item-count" className="text-gray-900 font-medium">추가할 개수</Label>
+                      <Input
+                        id="item-count"
+                        type="number"
+                        min="1"
+                        value={selectedItemCount}
+                        onChange={(e) => setSelectedItemCount(e.target.value)}
+                        placeholder="추가할 당첨 기록 개수"
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        해당 아이템의 당첨 기록을 몇 개 추가할지 입력하세요
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* User Info Card */}
+              {selectedUserForRecord && (
+                <Card className="border border-emerald-200 bg-emerald-50/50">
+                  <CardContent className="p-4">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">닉네임:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForRecord.nickname}</span>
+                      </div>
+                      {selectedUserForRecord.tag && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">고유닉:</span>
+                          <span className="font-mono text-gray-900">@{selectedUserForRecord.tag}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">레벨:</span>
+                        <span className="font-semibold text-gray-900">Lv.{selectedUserForRecord.level}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Notice */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">
+                  ⚠️ 당첨 기록은 룰렛 기록 페이지에서 확인 및 사용 처리할 수 있습니다
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setRouletteRecordDialogOpen(false)}
+                disabled={addingRecord}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={addRouletteRecord}
+                disabled={addingRecord || !selectedTemplateForRecord || selectedItemIndex === ''}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {addingRecord ? '추가 중...' : '기록 추가'}
               </Button>
             </DialogFooter>
           </DialogContent>

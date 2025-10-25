@@ -93,6 +93,13 @@ const defaultData = {
   shield: {
     shield_count: 0,
     history: []
+  },
+
+  'yacht-config': {
+    enabled: true,
+    winning_score: 50,
+    score_multiplier: 100,
+    game_cooldown: 60
   }
 };
 
