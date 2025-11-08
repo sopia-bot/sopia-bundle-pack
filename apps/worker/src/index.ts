@@ -36,9 +36,30 @@ function isAdmin(author: User) {
 // 매니저 초기화
 const fanscoreManager = new FanscoreManager();
 let config: FanscoreConfig | null = null;
-fanscoreManager.loadConfig().then((config_) => {
-    config = config_;
-});
+
+// 설정 로드 재시도 로직
+async function loadConfigWithRetry() {
+    while (true) {
+        try {
+            const config_ = await fanscoreManager.loadConfig();
+            // status: 404 체크
+            if (config_ && typeof config_ === 'object' && 'status' in config_ && config_.status === 404) {
+                console.log('[Worker] Config not found (404), retrying in 1 second...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+            }
+            // 정상적인 config인 경우
+            config = config_ as FanscoreConfig;
+            console.log('[Worker] Config loaded successfully');
+            break;
+        } catch (error) {
+            console.error('[Worker] Failed to load config:', error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+
+loadConfigWithRetry();
 (window as any).fanscoreManager = fanscoreManager;
 
 // 퀴즈 매니저 초기화
@@ -68,6 +89,7 @@ commandRegistry.register('실드', handleShieldCommand);
 // 애청지수 명령어
 commandRegistry.register('내정보', async (args, context) => {
     // 애청지수 번들이 비활성화되어 있으면 명령어 무시
+    console.log('starter_pack: 내정보', args, context, config);
     if (!config || !config.enabled) {
         return;
     }
@@ -164,6 +186,7 @@ commandRegistry.register('설정', async (args, context) => {
 async function liveMessage(evt: LiveMessageSocket, socket: LiveSocket): Promise<void> {
     const message = evt.update_component.message.value.trim();
     const user = evt.data.user;
+    console.log('starter_pack: liveMessage', user, message);
     
     // 사용자 등록 여부 확인
     const isRegistered = await fanscoreManager.isUserRegistered(user.id);
@@ -192,6 +215,7 @@ async function liveMessage(evt: LiveMessageSocket, socket: LiveSocket): Promise<
 
     // 명령어 파싱
     const parsed = parseCommand(message);
+    console.log('starter_pack: parsed command', parsed);
     if (parsed) {
         try {
             // 명령어 실행
