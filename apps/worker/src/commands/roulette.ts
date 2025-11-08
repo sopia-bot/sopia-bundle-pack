@@ -55,6 +55,55 @@ async function showRouletteList(
 }
 
 /**
+ * !룰렛 목록 [템플릿 번호] - 템플릿 아이템 목록 표시
+ */
+async function handleShowRouletteItems(
+  context: CommandContext,
+  rouletteManager: RouletteManager,
+  templateNumber: number
+): Promise<void> {
+  const { socket } = context;
+
+  try {
+    const templates = rouletteManager.getAllTemplates();
+
+    if (templateNumber < 1 || templateNumber > templates.length) {
+      await socket.message(`템플릿 번호는 1부터 ${templates.length}까지 입니다.`);
+      return;
+    }
+
+    const template = templates[templateNumber - 1];
+    const lines = [
+      `[룰렛 아이템: ${template.name}]`,
+      `템플릿 ID: ${template.template_id}`,
+      ''
+    ];
+
+    if (template.items.length === 0) {
+      lines.push('아이템이 없습니다.');
+    } else {
+      template.items.forEach((item, index) => {
+        let itemInfo = `${index + 1}. ${item.label}`;
+        
+        if (item.type === 'shield' && item.value !== undefined) {
+          const sign = item.value >= 0 ? '+' : '';
+          itemInfo += ` [실드 ${sign}${item.value}]`;
+        } else if (item.type === 'ticket' && item.value !== undefined) {
+          itemInfo += ` [복권 ${item.value}장]`;
+        }
+        
+        lines.push(itemInfo);
+      });
+    }
+
+    await socket.message(lines.join('\\n'));
+  } catch (error: any) {
+    console.error('[RouletteCommand] Error in handleShowRouletteItems:', error?.message);
+    await socket.message('룰렛 아이템 조회 중 오류가 발생했습니다.');
+  }
+}
+
+/**
  * !룰렛 - 템플릿 리스트 표시
  * !룰렛 [템플릿 번호] [횟수]
  * !룰렛 [템플릿 번호]
@@ -75,6 +124,23 @@ export async function handleRouletteCommand(
   }
 
   try {
+    // !룰렛 목록 [템플릿 번호]
+    if (args[0] === '목록') {
+      if (args.length < 2) {
+        await socket.message('사용법: !룰렛 목록 [템플릿 번호]');
+        return;
+      }
+      
+      const templateNumber = parseInt(args[1]);
+      if (isNaN(templateNumber)) {
+        await socket.message('올바른 템플릿 번호를 입력해주세요.');
+        return;
+      }
+      
+      await handleShowRouletteItems(context, rouletteManager, templateNumber);
+      return;
+    }
+
     // !룰렛 전체
     if (args[0] === '전체') {
       await handleRouletteAll(context, rouletteManager);
