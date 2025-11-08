@@ -194,8 +194,10 @@ router.post('/keep-items/:userId/use', async (req, res) => {
     
     logger.debug('Using keep item', { userId, itemIndex });
     
-    const data = await getDataFile('roulette');
-    const userKeepItems = data.keepItems.find((k: any) => k.user_id === parseInt(userId));
+    const rouletteData = await getDataFile('roulette');
+    const historyData = await getDataFile('roulette-history');
+    
+    const userKeepItems = rouletteData.keepItems.find((k: any) => k.user_id === parseInt(userId));
     
     if (!userKeepItems) {
       return res.status(404).json({ error: 'User keep items not found' });
@@ -218,7 +220,34 @@ router.post('/keep-items/:userId/use', async (req, res) => {
       userKeepItems.items.splice(itemIndex, 1);
     }
     
-    await saveDataFile('roulette', data);
+    // history에서 가장 마지막에 추가된 해당 아이템 기록 찾기
+    // 같은 label과 template_id를 가진 기록 중에서 used가 false인 것 중 가장 최신 것
+    const matchingRecords = historyData
+      .filter((record: any) => 
+        record.user_id === parseInt(userId) &&
+        record.item.label === item.label &&
+        record.template_id === item.template_id &&
+        record.used === false
+      )
+      .sort((a: any, b: any) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+    
+    if (matchingRecords.length > 0) {
+      // 가장 마지막에 추가된 기록 (가장 최신 것)
+      const latestRecord = matchingRecords[0];
+      latestRecord.used = true;
+      
+      logger.debug('History record updated', {
+        recordId: latestRecord.id,
+        userId,
+        itemLabel: item.label
+      });
+    }
+    
+    // 두 파일 모두 저장
+    await saveDataFile('roulette', rouletteData);
+    await saveDataFile('roulette-history', historyData);
     
     logger.info('Keep item used', { userId, itemIndex, itemLabel: item.label });
     
@@ -380,26 +409,96 @@ router.put('/history/:recordId/use', async (req, res) => {
     
     logger.debug('Updating roulette record status', { recordId, used });
     
-    const data = await getDataFile('roulette-history');
-    const recordIndex = data.findIndex((item: any) => item.id === recordId);
+    const historyData = await getDataFile('roulette-history');
+    const rouletteData = await getDataFile('roulette');
+    
+    const recordIndex = historyData.findIndex((item: any) => item.id === recordId);
     
     if (recordIndex === -1) {
       logger.warn('Roulette record not found for status update', { recordId });
       return res.status(404).json({ error: 'Record not found' });
     }
     
-    const oldStatus = data[recordIndex].used;
-    data[recordIndex].used = used;
-    await saveDataFile('roulette-history', data);
+    const record = historyData[recordIndex];
+    
+    // keepItems 관리
+    let userKeepItems = rouletteData.keepItems.find((k: any) => k.user_id === record.user_id);
+    
+    if (used) {
+      // 사용됨으로 변경: keepItems에서 count -1 (0이면 제거), history의 used: true
+      if (userKeepItems && userKeepItems.items) {
+        const itemIndex = userKeepItems.items.findIndex(
+          (i: any) => i.label === record.item.label && i.template_id === record.template_id
+        );
+        
+        if (itemIndex !== -1) {
+          const item = userKeepItems.items[itemIndex];
+          if (item.count > 1) {
+            item.count -= 1;
+          } else {
+            userKeepItems.items.splice(itemIndex, 1);
+          }
+          
+          // 아이템이 모두 사라지면 사용자 keepItems 제거
+          if (userKeepItems.items.length === 0) {
+            const keepItemsIndex = rouletteData.keepItems.findIndex(
+              (k: any) => k.user_id === record.user_id
+            );
+            if (keepItemsIndex !== -1) {
+              rouletteData.keepItems.splice(keepItemsIndex, 1);
+            }
+          }
+        }
+      }
+      
+      // history의 used를 true로 변경
+      record.used = true;
+    } else {
+      // 미사용으로 변경: keepItems에 추가 (count +1), history의 used: false
+      if (!userKeepItems) {
+        userKeepItems = {
+          user_id: record.user_id,
+          nickname: record.nickname,
+          tag: record.nickname, // tag는 기본값으로 nickname 사용
+          items: []
+        };
+        rouletteData.keepItems.push(userKeepItems);
+      }
+      
+      // 같은 아이템이 이미 있는지 확인 (label, template_id로 판단)
+      const existingItem = userKeepItems.items.find(
+        (i: any) => i.label === record.item.label && i.template_id === record.template_id
+      );
+      
+      if (existingItem) {
+        existingItem.count += 1;
+      } else {
+        userKeepItems.items.push({
+          id: `keep-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          type: record.item.type || 'custom',
+          label: record.item.label,
+          count: 1,
+          percentage: record.item.percentage,
+          template_id: record.template_id,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // history의 used를 false로 변경
+      record.used = false;
+    }
+    
+    // 두 파일 모두 저장
+    await saveDataFile('roulette-history', historyData);
+    await saveDataFile('roulette', rouletteData);
     
     logger.info('Roulette record status updated successfully', {
       recordId,
-      oldStatus,
       newStatus: used,
-      nickname: data[recordIndex].nickname
+      nickname: record.nickname
     });
     
-    res.json(data[recordIndex]);
+    res.json(record);
   } catch (error: any) {
     logger.error('Failed to update roulette record status', {
       error: error?.message || 'Unknown error',

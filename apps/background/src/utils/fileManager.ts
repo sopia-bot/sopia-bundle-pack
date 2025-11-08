@@ -59,7 +59,8 @@ const defaultData = {
     quiz_interval: 180,
     quiz_timeout: 5,
     lottery_enabled: false,
-    lottery_spoon_required: 50
+    lottery_spoon_required: 50,
+    show_score: true
   },
   
   templates: [
