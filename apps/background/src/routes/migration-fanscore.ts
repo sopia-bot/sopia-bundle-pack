@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
 import logger from '../utils/logger';
+import { searchUser } from './user-search';
 
 const router = express.Router();
 import CfgLite from 'cfg-lite';
@@ -245,29 +246,18 @@ router.post('/execute', async (req, res) => {
 
     const migratedUsers = [];
     const failedUsers = [];
+    const accountChanges: Array<{
+      tag: string;
+      oldUserId: number;
+      oldNickname: string;
+      newUserId: number;
+      newNickname: string;
+    }> = [];
 
     for (const user of data.users) {
       try {
-        // 500ms 대기
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // user_id 조회
-        const response = await fetch(
-          `https://kr-gw.spooncast.net/search/user?keyword=${encodeURIComponent(user.tag)}&page_size=30`,
-          {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': 'https://www.spooncast.net/',
-              'Origin': 'https://www.spooncast.net/',
-            }
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`API request failed: ${response.status}`);
-        }
-
-        const searchResult = await response.json();
+        // user_id 조회 (쓰로틀링 포함)
+        const searchResult = await searchUser(user.tag);
         const foundUser = searchResult.results?.find((r: any) => r.tag === user.tag);
 
         if (!foundUser) {
@@ -277,6 +267,20 @@ router.post('/execute', async (req, res) => {
         }
 
         const userId = foundUser.id;
+
+        // 기존 사용자 확인 (tag로 찾기)
+        const existingUser = fanscoreMap.get(user.tag) as any;
+        
+        // 계정 변경 감지: 기존 사용자가 있고 user_id가 다른 경우
+        if (existingUser && existingUser.user_id !== userId) {
+          accountChanges.push({
+            tag: user.tag,
+            oldUserId: existingUser.user_id,
+            oldNickname: existingUser.nickname,
+            newUserId: userId,
+            newNickname: foundUser.nickname || user.nickname,
+          });
+        }
 
         // 레벨 계산 (exp 기반)
         let level = 1;
@@ -340,7 +344,8 @@ router.post('/execute', async (req, res) => {
         total: data.users.length,
         migrated: migratedUsers.length,
         failed: failedUsers.length,
-        failedUsers: failedUsers
+        failedUsers: failedUsers,
+        accountChanges: accountChanges
       }
     });
 

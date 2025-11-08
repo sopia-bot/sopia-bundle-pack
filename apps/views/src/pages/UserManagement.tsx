@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { Layout } from '../components/Layout';
-import { Users, Trophy, Ticket, Award, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, Check, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Users, Trophy, Ticket, Award, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, Check, RotateCcw, AlertTriangle, UserCog } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +48,7 @@ interface UserData {
   user_id: number;
   nickname: string;
   tag?: string;
+  profile_url?: string;
   score: number;
   rank: number;
   chat_count: number;
@@ -120,6 +121,17 @@ export function UserManagement() {
     users: false, // 기본값은 false (매우 위험한 작업이므로)
   });
   const [resetting, setResetting] = useState(false);
+
+  // Account change dialog states
+  const [accountChangeDialogOpen, setAccountChangeDialogOpen] = useState(false);
+  const [selectedUserForAccountChange, setSelectedUserForAccountChange] = useState<UserData | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedNewUser, setSelectedNewUser] = useState<any | null>(null);
+  const [changingAccount, setChangingAccount] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [accountChangeConfirmOpen, setAccountChangeConfirmOpen] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -388,6 +400,142 @@ export function UserManagement() {
       toast.error('당첨 기록 추가 중 오류가 발생했습니다.');
     } finally {
       setAddingRecord(false);
+    }
+  };
+
+  const openAccountChangeDialog = (user: UserData) => {
+    setSelectedUserForAccountChange(user);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedNewUser(null);
+    setAccountChangeDialogOpen(true);
+  };
+
+  const searchUsers = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearching(true);
+      const response = await fetch('stp://starter-pack.sopia.dev/user/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ keyword: query })
+      });
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const data = await response.json();
+      setSearchResults(data.results || []);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+      toast.error('사용자 검색에 실패했습니다.');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    
+    // 이전 타이머 취소
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // 빈 값이면 즉시 결과 초기화
+    if (!value.trim()) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    
+    // 200ms 후에 검색 실행 (디바운싱)
+    const timeout = setTimeout(() => {
+      searchUsers(value);
+    }, 200);
+    
+    setSearchTimeout(timeout);
+  };
+  
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
+
+  const handleAccountChange = async () => {
+    if (!selectedUserForAccountChange || !selectedNewUser) {
+      toast.error('새 계정을 선택해주세요.');
+      return;
+    }
+
+    // 확인 모달 열기
+    setAccountChangeConfirmOpen(true);
+  };
+
+  const handleAccountChangeConfirm = async (confirmed: boolean) => {
+    if (!confirmed) {
+      setAccountChangeConfirmOpen(false);
+      return;
+    }
+
+    if (!selectedUserForAccountChange || !selectedNewUser) {
+      toast.error('새 계정을 선택해주세요.');
+      return;
+    }
+
+    setAccountChangeConfirmOpen(false);
+
+    try {
+      setChangingAccount(true);
+
+      // 계정 정보 업데이트 (백엔드에서 fanscore, roulette keepItems, tickets, history 모두 체크 및 업데이트)
+      const updateResponse = await fetch(`stp://starter-pack.sopia.dev/fanscore/user/${selectedUserForAccountChange.user_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: selectedNewUser.id,
+          nickname: selectedNewUser.nickname,
+          tag: selectedNewUser.tag || selectedNewUser.nickname,
+        }),
+      });
+
+      if (updateResponse.ok) {
+        const result = await updateResponse.json();
+        const historyUpdated = result.rouletteHistoryUpdated || 0;
+        const message = historyUpdated > 0 
+          ? `계정이 변경되었습니다. (${selectedUserForAccountChange.nickname} → ${selectedNewUser.nickname})\n룰렛 기록 ${historyUpdated}개 업데이트됨`
+          : `계정이 변경되었습니다. (${selectedUserForAccountChange.nickname} → ${selectedNewUser.nickname})`;
+        toast.success(message);
+        setAccountChangeDialogOpen(false);
+        setSelectedUserForAccountChange(null);
+        setSelectedNewUser(null);
+        setSearchQuery('');
+        setSearchResults([]);
+        fetchUsers(); // 목록 새로고침
+      } else {
+        const errorData = await updateResponse.json().catch(() => ({}));
+        const errorMessage = errorData.error || '계정 변경에 실패했습니다.';
+        toast.error(errorMessage);
+      }
+    } catch (error) {
+      console.error('Failed to change account:', error);
+      toast.error('계정 변경에 실패했습니다.');
+    } finally {
+      setChangingAccount(false);
     }
   };
 
@@ -756,6 +904,15 @@ export function UserManagement() {
             >
               <Trophy className="h-4 w-4 mr-1" />
               당첨
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openAccountChangeDialog(row.original)}
+              className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            >
+              <UserCog className="h-4 w-4 mr-1" />
+              계정 변경
             </Button>
           </div>
         );
@@ -1431,6 +1588,242 @@ export function UserManagement() {
                 className="bg-emerald-600 hover:bg-emerald-700"
               >
                 {addingRecord ? '추가 중...' : '기록 추가'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Account Change Dialog */}
+        <Dialog open={accountChangeDialogOpen} onOpenChange={setAccountChangeDialogOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold text-gray-900">계정 변경</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                {selectedUserForAccountChange && (
+                  <span>
+                    <span className="font-semibold text-gray-900">{selectedUserForAccountChange.nickname}</span>님의 계정 정보를 변경합니다
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Current User Info */}
+              {selectedUserForAccountChange && (
+                <Card className="border border-gray-200 bg-gray-50">
+                  <CardContent className="p-4">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">현재 닉네임:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForAccountChange.nickname}</span>
+                      </div>
+                      {selectedUserForAccountChange.tag && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">현재 고유닉:</span>
+                          <span className="font-mono text-gray-900">@{selectedUserForAccountChange.tag}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">현재 사용자 ID:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForAccountChange.user_id}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* User Search */}
+              <div>
+                <Label htmlFor="user-search" className="text-gray-900 font-medium">새 계정 검색</Label>
+                <div className="mt-2 space-y-2">
+                  <Input
+                    id="user-search"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="고유닉 또는 닉네임으로 검색..."
+                    disabled={changingAccount}
+                  />
+                  {searching && (
+                    <p className="text-sm text-gray-500">검색 중...</p>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  고유닉 또는 닉네임으로 검색하여 새 계정을 선택하세요
+                </p>
+              </div>
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-gray-900 font-medium">검색 결과</Label>
+                  <div className="max-h-60 overflow-y-auto border rounded-md">
+                    {searchResults.map((user) => (
+                      <div
+                        key={user.id}
+                        onClick={() => setSelectedNewUser(user)}
+                        className={`p-3 cursor-pointer border-b last:border-b-0 hover:bg-gray-50 transition-colors ${
+                          selectedNewUser?.id === user.id ? 'bg-purple-50 border-purple-200' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {user.profile_url ? (
+                              <img
+                                src={user.profile_url}
+                                alt={user.nickname}
+                                className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
+                                <Users className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-medium text-gray-900">{user.nickname}</p>
+                              <p className="text-xs text-gray-500">
+                                @{user.tag} · ID: {user.id}
+                              </p>
+                            </div>
+                          </div>
+                          {selectedNewUser?.id === user.id && (
+                            <Check className="h-5 w-5 text-purple-600" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Selected New User Info */}
+              {selectedNewUser && (
+                <Card className="border border-purple-200 bg-purple-50">
+                  <CardContent className="p-4">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">새 닉네임:</span>
+                        <span className="font-semibold text-gray-900">{selectedNewUser.nickname}</span>
+                      </div>
+                      {selectedNewUser.tag && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">새 고유닉:</span>
+                          <span className="font-mono text-gray-900">@{selectedNewUser.tag}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">새 사용자 ID:</span>
+                        <span className="font-semibold text-gray-900">{selectedNewUser.id}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Notice */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">
+                  ⚠️ 계정 변경 시 기존 사용자 ID가 새 사용자 ID로 변경됩니다. 애청지수, 레벨, 순위 등 모든 데이터는 유지됩니다.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAccountChangeDialogOpen(false);
+                  setSelectedUserForAccountChange(null);
+                  setSelectedNewUser(null);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                disabled={changingAccount}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={handleAccountChange}
+                disabled={changingAccount || !selectedNewUser}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                {changingAccount ? '변경 중...' : '계정 변경'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Account Change Confirm Dialog */}
+        <Dialog open={accountChangeConfirmOpen} onOpenChange={setAccountChangeConfirmOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-amber-600">
+                <AlertTriangle className="h-6 w-6" />
+                계정 변경 확인
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                계정 변경을 진행하시겠습니까?
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedUserForAccountChange && selectedNewUser && (
+              <div className="space-y-4 py-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-sm text-amber-800 font-medium mb-3">
+                    다음 계정의 정보가 변경됩니다:
+                  </p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">원본 계정</p>
+                        <p className="font-semibold text-gray-900">{selectedUserForAccountChange.nickname}</p>
+                        {selectedUserForAccountChange.tag && (
+                          <p className="text-xs text-gray-500">@{selectedUserForAccountChange.tag}</p>
+                        )}
+                        <p className="text-xs text-gray-500">ID: {selectedUserForAccountChange.user_id}</p>
+                      </div>
+                      <div className="text-amber-600 mx-4">
+                        →
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">새 계정</p>
+                        <p className="font-semibold text-gray-900">{selectedNewUser.nickname}</p>
+                        {selectedNewUser.tag && (
+                          <p className="text-xs text-gray-500">@{selectedNewUser.tag}</p>
+                        )}
+                        <p className="text-xs text-gray-500">ID: {selectedNewUser.id}</p>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 mt-2">
+                      <p className="font-medium mb-1">⚠️ 주의사항:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>계정 변경 시 기존 사용자 ID가 새 사용자 ID로 변경됩니다</li>
+                        <li>애청지수, 레벨, 순위 등 모든 데이터는 유지됩니다</li>
+                        <li>이 작업은 되돌릴 수 없습니다</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setAccountChangeConfirmOpen(false)}
+                disabled={changingAccount}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={() => handleAccountChangeConfirm(true)}
+                disabled={changingAccount}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {changingAccount ? '변경 중...' : '확인'}
               </Button>
             </DialogFooter>
           </DialogContent>

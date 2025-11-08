@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, AlertCircle, CheckCircle2, Database } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, Database, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface MigrationConfig {
@@ -51,6 +51,15 @@ export function MigrationDialog({ open, onOpenChange, onComplete }: MigrationDia
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [migrationProgress, setMigrationProgress] = useState({ current: 0, total: 0 });
+  const [accountChangeConfirmOpen, setAccountChangeConfirmOpen] = useState(false);
+  const [accountChanges, setAccountChanges] = useState<Array<{
+    tag: string;
+    oldUserId: number;
+    oldNickname: string;
+    newUserId: number;
+    newNickname: string;
+  }>>([]);
+  const [currentAccountChangeIndex, setCurrentAccountChangeIndex] = useState(0);
   const USERS_PER_PAGE = 10;
 
   // 다이얼로그가 열릴 때 자동으로 preview 데이터 로드
@@ -119,6 +128,17 @@ export function MigrationDialog({ open, onOpenChange, onComplete }: MigrationDia
         throw new Error(result.message || '마이그레이션에 실패했습니다.');
       }
       
+      // 계정 변경 확인
+      const changes = result.result?.accountChanges || [];
+      if (changes.length > 0) {
+        setAccountChanges(changes);
+        setCurrentAccountChangeIndex(0);
+        setAccountChangeConfirmOpen(true);
+        setIsMigrating(false);
+        clearInterval(progressInterval);
+        return;
+      }
+      
       // 성공 메시지
       const failedCount = result.result?.failed || 0;
       if (failedCount > 0) {
@@ -144,14 +164,148 @@ export function MigrationDialog({ open, onOpenChange, onComplete }: MigrationDia
     }
   };
 
+  const handleAccountChangeConfirm = async (confirmed: boolean) => {
+    if (!confirmed) {
+      // 취소 시 모달 닫고 마이그레이션 취소
+      setAccountChangeConfirmOpen(false);
+      setAccountChanges([]);
+      setCurrentAccountChangeIndex(0);
+      toast.error('마이그레이션이 취소되었습니다.');
+      return;
+    }
+
+    // 마지막 계정 변경 확인인 경우 룰렛 기록 업데이트 후 마이그레이션 완료 처리
+    if (currentAccountChangeIndex >= accountChanges.length - 1) {
+      try {
+        // 룰렛 기록 업데이트
+        let totalRouletteUpdated = 0;
+        for (const change of accountChanges) {
+          const rouletteResponse = await fetch('stp://starter-pack.sopia.dev/migration/roulette/update-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              oldUserId: change.oldUserId,
+              newUserId: change.newUserId,
+              newNickname: change.newNickname,
+            }),
+          });
+          
+          if (rouletteResponse.ok) {
+            const rouletteResult = await rouletteResponse.json();
+            totalRouletteUpdated += rouletteResult.historyUpdated || 0;
+          }
+        }
+        
+        setAccountChangeConfirmOpen(false);
+        setAccountChanges([]);
+        setCurrentAccountChangeIndex(0);
+        
+        // 성공 메시지
+        const message = totalRouletteUpdated > 0
+          ? `총 ${accountChanges.length}개의 계정 변경이 확인되었습니다. (룰렛 기록 ${totalRouletteUpdated}개 업데이트됨)`
+          : `총 ${accountChanges.length}개의 계정 변경이 확인되었습니다.`;
+        toast.success('마이그레이션이 완료되었습니다!', {
+          description: message,
+        });
+        
+        onComplete();
+        onOpenChange(false);
+      } catch (error: any) {
+        toast.error('룰렛 기록 업데이트 실패', {
+          description: error?.message || '룰렛 기록을 업데이트하는 중 오류가 발생했습니다.',
+        });
+      }
+    } else {
+      // 다음 계정 변경 확인
+      setCurrentAccountChangeIndex(prev => prev + 1);
+    }
+  };
+
   // 페이지네이션
   const totalPages = previewData ? Math.ceil(previewData.users.length / USERS_PER_PAGE) : 0;
   const paginatedUsers = previewData
     ? previewData.users.slice((currentPage - 1) * USERS_PER_PAGE, currentPage * USERS_PER_PAGE)
     : [];
+  
+  const currentAccountChange = accountChanges[currentAccountChangeIndex];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      {/* 계정 변경 확인 모달 */}
+      <Dialog open={accountChangeConfirmOpen} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-amber-600">
+              <AlertTriangle className="h-6 w-6" />
+              계정 변경 확인
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              마이그레이션 중 계정 변경이 감지되었습니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          {currentAccountChange && (
+            <div className="space-y-4 py-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <p className="text-sm text-amber-800 font-medium mb-3">
+                  다음 계정의 정보가 변경됩니다:
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-1">원본 계정</p>
+                      <p className="font-semibold text-gray-900">{currentAccountChange.oldNickname}</p>
+                      <p className="text-xs text-gray-500">ID: {currentAccountChange.oldUserId}</p>
+                    </div>
+                    <div className="text-amber-600 mx-4">
+                      →
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 mb-1">새 계정</p>
+                      <p className="font-semibold text-gray-900">{currentAccountChange.newNickname}</p>
+                      <p className="text-xs text-gray-500">ID: {currentAccountChange.newUserId}</p>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-600 mt-2">
+                    <p className="font-medium mb-1">⚠️ 주의사항:</p>
+                    <ul className="list-disc list-inside space-y-1 ml-2">
+                      <li>계정 변경 시 기존 사용자 ID가 새 사용자 ID로 변경됩니다</li>
+                      <li>애청지수, 레벨, 순위 등 모든 데이터는 유지됩니다</li>
+                      <li>이 작업은 되돌릴 수 없습니다</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {accountChanges.length > 1 && (
+                <div className="text-sm text-gray-600 text-center">
+                  {currentAccountChangeIndex + 1} / {accountChanges.length} 계정 변경 확인 중
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => handleAccountChangeConfirm(false)}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={() => handleAccountChangeConfirm(true)}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              {accountChanges.length > 1 && currentAccountChangeIndex < accountChanges.length - 1
+                ? '다음 확인'
+                : '확인'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 마이그레이션 다이얼로그 */}
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
@@ -380,6 +534,7 @@ export function MigrationDialog({ open, onOpenChange, onComplete }: MigrationDia
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 

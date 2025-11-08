@@ -1,5 +1,6 @@
 import express from 'express';
 import userRoutes from './routes/user';
+import userSearchRoutes from './routes/user-search';
 import fanscoreRoutes from './routes/fanscore';
 import fanscoreConfigRoutes from './routes/fanscore-config';
 import templateRoutes from './routes/templates';
@@ -58,7 +59,8 @@ async function validateAndFixFanscoreConfig() {
       quiz_interval: 30,
       quiz_timeout: 5,
       lottery_enabled: true,
-      lottery_spoon_required: 100
+      lottery_spoon_required: 100,
+      show_score: true
     };
 
     let needsUpdate = false;
@@ -75,7 +77,8 @@ async function validateAndFixFanscoreConfig() {
       quiz_interval: safeIntData(config.quiz_interval, defaultConfig.quiz_interval),
       quiz_timeout: safeIntData(config.quiz_timeout, defaultConfig.quiz_timeout),
       lottery_enabled: safeBooleanData(config.lottery_enabled, defaultConfig.lottery_enabled),
-      lottery_spoon_required: safeIntData(config.lottery_spoon_required, defaultConfig.lottery_spoon_required)
+      lottery_spoon_required: safeIntData(config.lottery_spoon_required, defaultConfig.lottery_spoon_required),
+      show_score: safeBooleanData(config.show_score, defaultConfig.show_score)
     };
 
     // 변경사항 확인
@@ -141,6 +144,7 @@ app.use((req, res, next) => {
 
 // 라우터 연결
 app.use('/user', userRoutes);
+app.use('/user', userSearchRoutes);
 app.use('/fanscore', fanscoreRoutes);
 app.use('/fanscore/config', fanscoreConfigRoutes);
 app.use('/templates', templateRoutes);

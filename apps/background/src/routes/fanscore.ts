@@ -226,33 +226,127 @@ router.put('/user/:userId', async (req, res) => {
     const { userId } = req.params;
     const updates = req.body;
     
-    logger.debug('Updating user fanscore', { userId, updates });
+    logger.debug('Updating user account', { userId, updates });
     
-    const data = await getDataFile('fanscore');
-    const userIndex = data.findIndex((item: any) => item.user_id === parseInt(userId));
+    const oldUserId = parseInt(userId);
+    const newUserId = updates.user_id ? parseInt(updates.user_id) : oldUserId;
+    const newNickname = updates.nickname;
+    const newTag = updates.tag;
     
-    if (userIndex === -1) {
-      logger.warn('User not found for update', { userId });
-      return res.status(404).json({ error: 'User not found' });
+    // 계정 변경인 경우 (user_id가 변경됨)
+    const isAccountChange = newUserId !== oldUserId;
+    
+    if (isAccountChange) {
+      // 새 user_id가 이미 사용 중인지 확인 (fanscore, roulette 모두 확인)
+      const fanscoreData = await getDataFile('fanscore');
+      const rouletteData = await getDataFile('roulette');
+      
+      const fanscoreExists = fanscoreData.some((u: any) => u.user_id === newUserId);
+      if (fanscoreExists) {
+        logger.warn('New user ID already in use', { newUserId });
+        return res.status(400).json({ error: '선택한 사용자 ID가 이미 사용 중입니다.' });
+      }
+      
+      // fanscore 업데이트
+      const userIndex = fanscoreData.findIndex((item: any) => item.user_id === oldUserId);
+      if (userIndex === -1) {
+        logger.warn('User not found for update', { userId: oldUserId });
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      const oldData = { ...fanscoreData[userIndex] };
+      fanscoreData[userIndex] = {
+        ...fanscoreData[userIndex],
+        ...updates
+      };
+      await saveDataFile('fanscore', fanscoreData);
+      
+      // roulette keepItems 업데이트
+      if (rouletteData.keepItems) {
+        const keepItemsIndex = rouletteData.keepItems.findIndex((k: any) => k.user_id === oldUserId);
+        if (keepItemsIndex !== -1) {
+          rouletteData.keepItems[keepItemsIndex] = {
+            ...rouletteData.keepItems[keepItemsIndex],
+            user_id: newUserId,
+            nickname: newNickname || rouletteData.keepItems[keepItemsIndex].nickname,
+            tag: newTag || rouletteData.keepItems[keepItemsIndex].tag,
+          };
+        }
+      }
+      
+      // roulette tickets 업데이트
+      if (rouletteData.tickets) {
+        const ticketsIndex = rouletteData.tickets.findIndex((t: any) => t.user_id === oldUserId);
+        if (ticketsIndex !== -1) {
+          rouletteData.tickets[ticketsIndex] = {
+            ...rouletteData.tickets[ticketsIndex],
+            user_id: newUserId,
+            nickname: newNickname || rouletteData.tickets[ticketsIndex].nickname,
+            tag: newTag || rouletteData.tickets[ticketsIndex].tag,
+          };
+        }
+      }
+      
+      await saveDataFile('roulette', rouletteData);
+      
+      // roulette-history 업데이트
+      const historyData = await getDataFile('roulette-history');
+      let historyUpdated = 0;
+      historyData.forEach((record: any) => {
+        if (record.user_id === oldUserId) {
+          record.user_id = newUserId;
+          if (newNickname) {
+            record.nickname = newNickname;
+          }
+          historyUpdated++;
+        }
+      });
+      
+      if (historyUpdated > 0) {
+        await saveDataFile('roulette-history', historyData);
+      }
+      
+      logger.info('Account changed successfully', {
+        oldUserId,
+        newUserId,
+        newNickname,
+        historyUpdated,
+        oldScore: oldData.score,
+        newScore: fanscoreData[userIndex].score
+      });
+      
+      res.json({
+        ...fanscoreData[userIndex],
+        rouletteHistoryUpdated: historyUpdated
+      });
+    } else {
+      // 일반 업데이트 (user_id 변경 없음)
+      const data = await getDataFile('fanscore');
+      const userIndex = data.findIndex((item: any) => item.user_id === oldUserId);
+      
+      if (userIndex === -1) {
+        logger.warn('User not found for update', { userId: oldUserId });
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      const oldData = { ...data[userIndex] };
+      data[userIndex] = {
+        ...data[userIndex],
+        ...updates
+      };
+      
+      await saveDataFile('fanscore', data);
+      
+      logger.info('User fanscore updated successfully', {
+        userId: oldUserId,
+        oldScore: oldData.score,
+        newScore: data[userIndex].score
+      });
+      
+      res.json(data[userIndex]);
     }
-    
-    const oldData = { ...data[userIndex] };
-    data[userIndex] = {
-      ...data[userIndex],
-      ...updates
-    };
-    
-    await saveDataFile('fanscore', data);
-    
-    logger.info('User fanscore updated successfully', {
-      userId,
-      oldScore: oldData.score,
-      newScore: data[userIndex].score
-    });
-    
-    res.json(data[userIndex]);
   } catch (error: any) {
-    logger.error('Failed to update user fanscore', {
+    logger.error('Failed to update user account', {
       error: error?.message || 'Unknown error',
       stack: error?.stack || undefined,
       userId: req.params.userId,

@@ -601,5 +601,101 @@ async function executeType3(): Promise<MigrationExecuteResult> {
   }
 }
 
+// 계정 변경 시 룰렛 기록 업데이트 함수 (내부 사용)
+export async function updateRouletteAccount(oldUserId: number, newUserId: number, newNickname?: string): Promise<{ success: boolean; historyUpdated: number }> {
+  try {
+    logger.debug('Updating roulette records for account change', { oldUserId, newUserId });
+
+    const rouletteData = await getDataFile('roulette');
+    const historyData = await getDataFile('roulette-history');
+
+    let historyUpdated = 0;
+
+    // roulette keepItems 업데이트
+    if (rouletteData.keepItems) {
+      const keepItemsIndex = rouletteData.keepItems.findIndex((k: any) => k.user_id === parseInt(oldUserId.toString()));
+      if (keepItemsIndex !== -1) {
+        rouletteData.keepItems[keepItemsIndex] = {
+          ...rouletteData.keepItems[keepItemsIndex],
+          user_id: parseInt(newUserId.toString()),
+          nickname: newNickname || rouletteData.keepItems[keepItemsIndex].nickname,
+          tag: rouletteData.keepItems[keepItemsIndex].tag,
+        };
+      }
+    }
+
+    // roulette tickets 업데이트
+    if (rouletteData.tickets) {
+      const ticketsIndex = rouletteData.tickets.findIndex((t: any) => t.user_id === parseInt(oldUserId.toString()));
+      if (ticketsIndex !== -1) {
+        rouletteData.tickets[ticketsIndex] = {
+          ...rouletteData.tickets[ticketsIndex],
+          user_id: parseInt(newUserId.toString()),
+          nickname: newNickname || rouletteData.tickets[ticketsIndex].nickname,
+          tag: rouletteData.tickets[ticketsIndex].tag,
+        };
+      }
+    }
+
+    await saveDataFile('roulette', rouletteData);
+
+    // roulette-history 업데이트
+    historyData.forEach((record: any) => {
+      if (record.user_id === parseInt(oldUserId.toString())) {
+        record.user_id = parseInt(newUserId.toString());
+        if (newNickname) {
+          record.nickname = newNickname;
+        }
+        historyUpdated++;
+      }
+    });
+
+    if (historyUpdated > 0) {
+      await saveDataFile('roulette-history', historyData);
+    }
+
+    logger.info('Roulette account updated successfully', {
+      oldUserId,
+      newUserId,
+      historyUpdated
+    });
+
+    return {
+      success: true,
+      historyUpdated
+    };
+  } catch (error: any) {
+    logger.error('Failed to update roulette account', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined,
+      oldUserId,
+      newUserId
+    });
+    throw error;
+  }
+}
+
+// POST /migration/roulette/update-account
+// 계정 변경 시 룰렛 기록 업데이트 (fanscore 마이그레이션에서 사용)
+router.post('/update-account', async (req, res) => {
+  try {
+    const { oldUserId, newUserId, newNickname } = req.body;
+
+    if (!oldUserId || !newUserId) {
+      return res.status(400).json({ error: 'oldUserId and newUserId are required' });
+    }
+
+    const result = await updateRouletteAccount(oldUserId, newUserId, newNickname);
+    res.json(result);
+  } catch (error: any) {
+    logger.error('Failed to update roulette account', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined,
+      body: req.body
+    });
+    res.status(500).json({ error: 'Failed to update roulette account' });
+  }
+});
+
 export default router;
 
