@@ -271,7 +271,6 @@ export function ChatBuilder() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewContent, setPreviewContent] = useState<string>('');
   const [previewTitle, setPreviewTitle] = useState<string>('미리보기');
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // 템플릿 데이터 로드
@@ -281,7 +280,6 @@ export function ChatBuilder() {
 
   const loadCommandData = async () => {
     try {
-      setIsLoading(true);
       const response = await fetch('stp://starter-pack.sopia.dev/command');
       
       if (response.ok) {
@@ -293,8 +291,6 @@ export function ChatBuilder() {
     } catch (error) {
       console.error('Failed to load command data:', error);
       toast.error('명령어 템플릿을 불러오는데 실패했습니다.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
