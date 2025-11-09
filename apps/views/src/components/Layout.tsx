@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Settings, History, Shield, Target, Users, BookOpen, X, ExternalLink } from 'lucide-react';
+import { Home, Settings, History, Shield, Target, Users, BookOpen, X, ExternalLink, MessageSquare } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -32,6 +32,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/fanscore-settings', label: '애청지수 설정', icon: Target },
     { path: '/user-management', label: '청취자 관리', icon: Users },
     { path: '/shield-settings', label: '실드 설정', icon: Shield },
+    { path: '/chat-builder', label: '명령어 꾸미기', icon: MessageSquare },
   ];
 
   return (

@@ -30,12 +30,21 @@ async function getAllListeners(liveId: number): Promise<User[]> {
 export async function handleLottery(
   args: string[],
   context: { user: User; socket: LiveSocket },
-  lotteryManager: LotteryManager
+  lotteryManager: LotteryManager,
+  commandTemplateManager?: any
 ): Promise<void> {
   const { user, socket } = context;
 
+  const variables = {
+    nickname: user.nickname,
+    tag: user.tag || user.nickname
+  };
+
   if (args.length === 0) {
-    await socket.message('❌ 사용법: !복권 [숫자1] [숫자2] [숫자3] 또는 !복권 자동');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권', 'error_usage_general', variables, '❌ 사용법: !복권 [숫자1] [숫자2] [숫자3] 또는 !복권 자동')
+      : '❌ 사용법: !복권 [숫자1] [숫자2] [숫자3] 또는 !복권 자동';
+    await socket.message(message);
     return;
   }
 
@@ -55,7 +64,10 @@ export async function handleLottery(
 
   // 일반 복권
   if (args.length < 3) {
-    await socket.message('❌ 사용법: !복권 [숫자1] [숫자2] [숫자3] (0~9 사이의 숫자)');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권', 'error_usage', variables, '❌ 사용법: !복권 [숫자1] [숫자2] [숫자3] (0~9 사이의 숫자)')
+      : '❌ 사용법: !복권 [숫자1] [숫자2] [숫자3] (0~9 사이의 숫자)';
+    await socket.message(message);
     return;
   }
 
@@ -63,13 +75,19 @@ export async function handleLottery(
 
   // 숫자 유효성 검사
   if (numbers.some(n => isNaN(n) || n < 0 || n > 9)) {
-    await socket.message('❌ 숫자는 0~9 사이여야 합니다.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권', 'error_invalid_numbers', variables, '❌ 숫자는 0~9 사이여야 합니다.')
+      : '❌ 숫자는 0~9 사이여야 합니다.';
+    await socket.message(message);
     return;
   }
 
   // 중복 검사
   if (new Set(numbers).size !== 3) {
-    await socket.message('❌ 중복되지 않은 3개의 숫자를 입력해주세요.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권', 'error_duplicate', variables, '❌ 중복되지 않은 3개의 숫자를 입력해주세요.')
+      : '❌ 중복되지 않은 3개의 숫자를 입력해주세요.';
+    await socket.message(message);
     return;
   }
 
@@ -92,17 +110,29 @@ export async function handleLottery(
 export async function handleGiveLottery(
   args: string[],
   context: { user: User; socket: LiveSocket; isAdmin: boolean; liveId: number },
-  fanscoreManager: FanscoreManager
+  fanscoreManager: FanscoreManager,
+  commandTemplateManager?: any
 ): Promise<void> {
   const { user, socket, isAdmin, liveId } = context;
 
+  const variables = {
+    nickname: user.nickname,
+    tag: user.tag || user.nickname
+  };
+
   if (!isAdmin) {
-    await socket.message('❌ 이 명령어는 DJ만 사용할 수 있습니다.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권지급', 'error_not_admin', variables, '❌ 이 명령어는 DJ만 사용할 수 있습니다.')
+      : '❌ 이 명령어는 DJ만 사용할 수 있습니다.';
+    await socket.message(message);
     return;
   }
 
   if (args.length < 2) {
-    await socket.message('❌ 사용법: !복권지급 전체 [갯수] 또는 !복권지급 [고유닉] [갯수]');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권지급', 'error_usage', variables, '❌ 사용법: !복권지급 전체 [갯수] 또는 !복권지급 [고유닉] [갯수]')
+      : '❌ 사용법: !복권지급 전체 [갯수] 또는 !복권지급 [고유닉] [갯수]';
+    await socket.message(message);
     return;
   }
 
@@ -110,7 +140,10 @@ export async function handleGiveLottery(
   const count = parseInt(args[1]);
 
   if (isNaN(count) || count <= 0) {
-    await socket.message('❌ 갯수는 1 이상의 숫자여야 합니다.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권지급', 'error_invalid_count', variables, '❌ 갯수는 1 이상의 숫자여야 합니다.')
+      : '❌ 갯수는 1 이상의 숫자여야 합니다.';
+    await socket.message(message);
     return;
   }
 
@@ -135,7 +168,10 @@ export async function handleGiveLottery(
       const targetUsers = listeners.filter(listener => registeredUserIds.has(listener.id));
       
       if (targetUsers.length === 0) {
-        await socket.message('⚠️ 현재 방에 등록된 청취자가 없습니다.');
+        const message = commandTemplateManager
+          ? commandTemplateManager.getMessage('복권지급', 'error_no_listeners', variables, '⚠️ 현재 방에 등록된 청취자가 없습니다.')
+          : '⚠️ 현재 방에 등록된 청취자가 없습니다.';
+        await socket.message(message);
         return;
       }
 
@@ -143,8 +179,12 @@ export async function handleGiveLottery(
       for (const listener of targetUsers) {
         fanscoreManager.updateLotteryTickets(listener.id, count, listener.nickname, listener.tag);
       }
-      
-      await socket.message(`✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`);
+
+      const successVars = { ...variables, user_count: targetUsers.length, count };
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('복권지급', 'success_all', successVars, `✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`)
+        : `✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`;
+      await socket.message(message);
       console.log(`[!복권지급 전체] ${user.nickname} gave ${count} lottery tickets to ${targetUsers.length} users in the room`);
       return;
     }
@@ -155,7 +195,11 @@ export async function handleGiveLottery(
     const userResponse = await fetch(`stp://${DOMAIN}/fanscore/user-by-tag/${encodeURIComponent(targetTag)}`);
     
     if (userResponse.status === 404) {
-      await socket.message(`⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`);
+      const vars = { ...variables, target_tag: targetTag };
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('복권지급', 'error_user_not_found', vars, `⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`)
+        : `⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`;
+      await socket.message(message);
       return;
     }
 
@@ -164,11 +208,18 @@ export async function handleGiveLottery(
     // 복권 지급 (pendingUpdates 사용)
     fanscoreManager.updateLotteryTickets(targetUser.user_id, count, targetUser.nickname, targetUser.tag);
 
-    await socket.message(`✅ ${targetUser.nickname}님에게 복권 ${count}장을 지급했습니다.`);
+    const successVars = { ...variables, target_nickname: targetUser.nickname, count };
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권지급', 'success', successVars, `✅ ${targetUser.nickname}님에게 복권 ${count}장을 지급했습니다.`)
+      : `✅ ${targetUser.nickname}님에게 복권 ${count}장을 지급했습니다.`;
+    await socket.message(message);
     console.log(`[!복권지급] ${user.nickname} gave ${count} lottery tickets to ${targetUser.nickname}`);
   } catch (error) {
     console.error('[!복권지급] Error:', error);
-    await socket.message('❌ 복권 지급에 실패했습니다.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권지급', 'error_failed', variables, '❌ 복권 지급에 실패했습니다.')
+      : '❌ 복권 지급에 실패했습니다.';
+    await socket.message(message);
   }
 }
 
@@ -178,12 +229,21 @@ export async function handleGiveLottery(
 export async function handleTransferLottery(
   args: string[],
   context: { user: User; socket: LiveSocket },
-  fanscoreManager: FanscoreManager
+  fanscoreManager: FanscoreManager,
+  commandTemplateManager?: any
 ): Promise<void> {
   const { user, socket } = context;
 
+  const variables = {
+    nickname: user.nickname,
+    tag: user.tag || user.nickname
+  };
+
   if (args.length < 2) {
-    await socket.message('❌ 사용법: !복권양도 [고유닉] [수량]');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권양도', 'error_usage', variables, '❌ 사용법: !복권양도 [고유닉] [수량]')
+      : '❌ 사용법: !복권양도 [고유닉] [수량]';
+    await socket.message(message);
     return;
   }
 
@@ -191,7 +251,10 @@ export async function handleTransferLottery(
   const count = parseInt(args[1]);
 
   if (isNaN(count) || count <= 0) {
-    await socket.message('❌ 수량은 1 이상의 숫자여야 합니다.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권양도', 'error_invalid_count', variables, '❌ 수량은 1 이상의 숫자여야 합니다.')
+      : '❌ 수량은 1 이상의 숫자여야 합니다.';
+    await socket.message(message);
     return;
   }
 
@@ -200,7 +263,10 @@ export async function handleTransferLottery(
     const myResponse = await fetch(`stp://${DOMAIN}/fanscore/user/${user.id}`);
     
     if (myResponse.status === 404) {
-      await socket.message('⚠️ 등록되지 않은 사용자입니다. "!내정보 생성"으로 등록해주세요.');
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('복권양도', 'error_not_registered', variables, '⚠️ 등록되지 않은 사용자입니다. "!내정보 생성"으로 등록해주세요.')
+        : '⚠️ 등록되지 않은 사용자입니다. "!내정보 생성"으로 등록해주세요.';
+      await socket.message(message);
       return;
     }
 
@@ -208,7 +274,11 @@ export async function handleTransferLottery(
 
     // 보유 복권 확인
     if (myProfile.lottery_tickets < count) {
-      await socket.message(`❌ 복권이 부족합니다. (보유: ${myProfile.lottery_tickets}장, 필요: ${count}장)`);
+      const vars = { ...variables, current: myProfile.lottery_tickets, required: count };
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('복권양도', 'error_insufficient', vars, `❌ 복권이 부족합니다. (보유: ${myProfile.lottery_tickets}장, 필요: ${count}장)`)
+        : `❌ 복권이 부족합니다. (보유: ${myProfile.lottery_tickets}장, 필요: ${count}장)`;
+      await socket.message(message);
       return;
     }
 
@@ -216,7 +286,11 @@ export async function handleTransferLottery(
     const targetResponse = await fetch(`stp://${DOMAIN}/fanscore/user-by-tag/${encodeURIComponent(targetTag)}`);
     
     if (targetResponse.status === 404) {
-      await socket.message(`⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`);
+      const vars = { ...variables, target_tag: targetTag };
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('복권양도', 'error_user_not_found', vars, `⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`)
+        : `⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`;
+      await socket.message(message);
       return;
     }
 
@@ -224,7 +298,10 @@ export async function handleTransferLottery(
 
     // 자기 자신에게 양도 방지
     if (targetUser.user_id === user.id) {
-      await socket.message('❌ 자기 자신에게는 양도할 수 없습니다.');
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('복권양도', 'error_self_transfer', variables, '❌ 자기 자신에게는 양도할 수 없습니다.')
+        : '❌ 자기 자신에게는 양도할 수 없습니다.';
+      await socket.message(message);
       return;
     }
 
@@ -232,11 +309,18 @@ export async function handleTransferLottery(
     fanscoreManager.updateLotteryTickets(user.id, -count, myProfile.nickname, myProfile.tag);
     fanscoreManager.updateLotteryTickets(targetUser.user_id, count, targetUser.nickname, targetUser.tag);
 
-    await socket.message(`✅ ${targetUser.nickname}님에게 복권 ${count}장을 양도했습니다.`);
+    const successVars = { ...variables, target_nickname: targetUser.nickname, count };
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권양도', 'success', successVars, `✅ ${targetUser.nickname}님에게 복권 ${count}장을 양도했습니다.`)
+      : `✅ ${targetUser.nickname}님에게 복권 ${count}장을 양도했습니다.`;
+    await socket.message(message);
     console.log(`[!복권양도] ${user.nickname} transferred ${count} lottery tickets to ${targetUser.nickname}`);
   } catch (error) {
     console.error('[!복권양도] Error:', error);
-    await socket.message('❌ 복권 양도에 실패했습니다.');
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('복권양도', 'error_failed', variables, '❌ 복권 양도에 실패했습니다.')
+      : '❌ 복권 양도에 실패했습니다.';
+    await socket.message(message);
   }
 }
 

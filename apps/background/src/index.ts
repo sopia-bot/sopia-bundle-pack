@@ -10,6 +10,7 @@ import quizRoutes from './routes/quiz';
 import migrationFanscoreRoutes from './routes/migration-fanscore';
 import migrationRouletteRoutes from './routes/migration-roulette';
 import yachtRoutes from './routes/yacht';
+import commandRoutes from './routes/command-routes';
 import logger from './utils/logger';
 import { initializeAllDataFiles, getDataFile, saveDataFile } from './utils/fileManager';
 
@@ -152,6 +153,7 @@ app.use('/roulette', rouletteRoutes);
 app.use('/shield', shieldRoutes);
 app.use('/quiz', quizRoutes);
 app.use('/yacht', yachtRoutes);
+app.use('/command', commandRoutes);
 app.use('/migration/fanscore', migrationFanscoreRoutes);
 app.use('/migration/roulette', migrationRouletteRoutes);
 

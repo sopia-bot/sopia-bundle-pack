@@ -13,6 +13,7 @@ import { QuizManager } from './managers/quiz-manager';
 import { LotteryManager } from './managers/lottery-manager';
 import { RouletteManager } from './managers/roulette-manager';
 import { YachtManager } from './managers/yacht-manager';
+import { CommandTemplateManager } from './managers/command-template-manager';
 import { FanscoreConfig } from './types/fanscore';
 import type { RouletteTemplate } from './types/roulette';
 import { handleYachtStatus, handleYachtGuide, handleYachtHands, handleYachtRoll, handleYachtDecide } from './commands/yacht';
@@ -80,11 +81,18 @@ const yachtManager = new YachtManager(fanscoreManager);
 yachtManager.loadConfig();
 (window as any).yachtManager = yachtManager;
 
+// 명령어 템플릿 매니저 초기화
+const commandTemplateManager = new CommandTemplateManager();
+commandTemplateManager.loadTemplates().then(() => {
+    console.log('[Worker] Command template manager initialized');
+});
+(window as any).commandTemplateManager = commandTemplateManager;
+
 // 명령어 레지스트리 초기화
 const commandRegistry = new CommandRegistry();
 
 // 실드 명령어
-commandRegistry.register('실드', handleShieldCommand);
+commandRegistry.register('실드', (args, context) => handleShieldCommand(args, context, commandTemplateManager));
 
 // 애청지수 명령어
 commandRegistry.register('내정보', async (args, context) => {
@@ -94,49 +102,49 @@ commandRegistry.register('내정보', async (args, context) => {
         return;
     }
     if (args.length === 0) {
-        await handleViewProfile(args, context, fanscoreManager);
+        await handleViewProfile(args, context, fanscoreManager, commandTemplateManager);
     } else if (args[0] === '생성') {
-        await handleCreateProfile(args.slice(1), context);
+        await handleCreateProfile(args.slice(1), context, commandTemplateManager);
     } else if (args[0] === '삭제') {
-        await handleDeleteProfile(args.slice(1), context);
+        await handleDeleteProfile(args.slice(1), context, commandTemplateManager);
     } else {
-        await handleViewProfile(args, context, fanscoreManager);
+        await handleViewProfile(args, context, fanscoreManager, commandTemplateManager);
     }
 });
 commandRegistry.register('상점', async (args, context) => {
     if (!config || !config.enabled) return;
-    await handleAddScore(args, context, fanscoreManager);
+    await handleAddScore(args, context, fanscoreManager, commandTemplateManager);
 });
 commandRegistry.register('감점', async (args, context) => {
     if (!config || !config.enabled) return;
-    await handleSubtractScore(args, context, fanscoreManager);
+    await handleSubtractScore(args, context, fanscoreManager, commandTemplateManager);
 });
 commandRegistry.register('랭크', async (args, context) => {
     if (!config || !config.enabled) return;
-    await handleRanking(args, context);
+    await handleRanking(args, context, commandTemplateManager);
 });
 
 // 복권 명령어
 commandRegistry.register('복권', async (args, context) => {
     if (!config || !config.enabled) return;
-    await handleLottery(args, context, lotteryManager);
+    await handleLottery(args, context, lotteryManager, commandTemplateManager);
 });
 commandRegistry.register('복권지급', async (args, context) => {
     if (!config || !config.enabled) return;
-    await handleGiveLottery(args, context as any, fanscoreManager);
+    await handleGiveLottery(args, context as any, fanscoreManager, commandTemplateManager);
 });
 commandRegistry.register('복권양도', async (args, context) => {
     if (!config || !config.enabled) return;
-    await handleTransferLottery(args, context, fanscoreManager);
+    await handleTransferLottery(args, context, fanscoreManager, commandTemplateManager);
 });
 
 // 룰렛 명령어
-commandRegistry.register('룰렛', (args, context) => handleRouletteCommand(args, context, rouletteManager));
-commandRegistry.register('킵', (args, context) => handleKeepCommand(args, context, rouletteManager));
-commandRegistry.register('사용', (args, context) => handleUseCommand(args, context, rouletteManager));
+commandRegistry.register('룰렛', (args, context) => handleRouletteCommand(args, context, rouletteManager, commandTemplateManager));
+commandRegistry.register('킵', (args, context) => handleKeepCommand(args, context, rouletteManager, commandTemplateManager));
+commandRegistry.register('사용', (args, context) => handleUseCommand(args, context, rouletteManager, commandTemplateManager));
 
 // 사용자 정보 명령어
-commandRegistry.register('고유닉', handleShowTag);
+commandRegistry.register('고유닉', (args, context) => handleShowTag(args, context, commandTemplateManager));
 
 // 야추 명령어
 commandRegistry.register('야추', async (args, context) => {
@@ -441,6 +449,12 @@ function backgroundListener(event: any, data: { channel: string; data?: any }): 
             // 야추 쿨타임 초기화
             yachtManager.clearAllCooldowns();
             console.log('[Worker] Yacht player cooldowns cleared');
+            break;
+        case 'command-updated':
+            // 명령어 템플릿 업데이트
+            commandTemplateManager.reload().then(() => {
+                console.log('[Worker] Command templates reloaded');
+            });
             break;
     }
 }

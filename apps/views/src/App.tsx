@@ -7,6 +7,7 @@ import { FanscoreSettings } from './pages/FanscoreSettings';
 import { UserManagement } from './pages/UserManagement';
 import { ShieldSettings } from './pages/ShieldSettings';
 import { StickerTest } from './pages/StickerTest';
+import { ChatBuilder } from './pages/ChatBuilder';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/user-management" element={<UserManagement />} />
           <Route path="/shield-settings" element={<ShieldSettings />} />
           <Route path="/sticker-test" element={<StickerTest />} />
+          <Route path="/chat-builder" element={<ChatBuilder />} />
         </Routes>
         <Toaster position="top-right" richColors />
       </div>
