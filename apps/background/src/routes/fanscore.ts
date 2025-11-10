@@ -56,12 +56,14 @@ router.get('/ranking', async (req, res) => {
     const rouletteTickets = new Map<number, number>();
     
     // 각 사용자별 템플릿 티켓 총합 계산
-    for (const {user_id:userId, tickets} of rouletteData.tickets) {
-      const userIdNum = parseInt(userId);
-      if (!isNaN(userIdNum) && typeof tickets === 'object' && tickets !== null) {
-        const totalTickets = Object.values(tickets as Record<string, number>)
-          .reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
-        rouletteTickets.set(userIdNum, totalTickets);
+    if ( rouletteData.tickets ) {
+      for (const {user_id:userId, tickets} of rouletteData.tickets) {
+        const userIdNum = parseInt(userId);
+        if (!isNaN(userIdNum) && typeof tickets === 'object' && tickets !== null) {
+          const totalTickets = Object.values(tickets as Record<string, number>)
+            .reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
+          rouletteTickets.set(userIdNum, totalTickets);
+        }
       }
     }
     
