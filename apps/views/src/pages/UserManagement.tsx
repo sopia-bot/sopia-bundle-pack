@@ -729,6 +729,61 @@ export function UserManagement() {
       },
     },
     {
+      id: 'actions',
+      header: () => <div className="text-center">작업</div>,
+      cell: ({ row }) => {
+        return (
+          <div className="flex justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openTicketDialog(row.original)}
+              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            >
+              <Ticket className="h-4 w-4 mr-1" />
+              티켓
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openLotteryDialog(row.original)}
+              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+            >
+              <Award className="h-4 w-4 mr-1" />
+              복권
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openRouletteRecordDialog(row.original)}
+              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+            >
+              <Trophy className="h-4 w-4 mr-1" />
+              당첨
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openAccountChangeDialog(row.original)}
+              className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            >
+              <UserCog className="h-4 w-4 mr-1" />
+              계정 변경
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openDeleteDialog(row.original)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              삭제
+            </Button>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'level',
       header: ({ column }) => {
         const isSorted = column.getIsSorted();
@@ -927,61 +982,6 @@ export function UserManagement() {
         return (
           <div className="text-sm text-gray-600">
             {formatDateTime(lastActivity)}
-          </div>
-        );
-      },
-    },
-    {
-      id: 'actions',
-      header: () => <div className="text-center">작업</div>,
-      cell: ({ row }) => {
-        return (
-          <div className="flex justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openTicketDialog(row.original)}
-              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-            >
-              <Ticket className="h-4 w-4 mr-1" />
-              티켓
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openLotteryDialog(row.original)}
-              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-            >
-              <Award className="h-4 w-4 mr-1" />
-              복권
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openRouletteRecordDialog(row.original)}
-              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-            >
-              <Trophy className="h-4 w-4 mr-1" />
-              당첨
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openAccountChangeDialog(row.original)}
-              className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-            >
-              <UserCog className="h-4 w-4 mr-1" />
-              계정 변경
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => openDeleteDialog(row.original)}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              삭제
-            </Button>
           </div>
         );
       },
