@@ -46,13 +46,13 @@ export class LotteryManager {
   private calculateReward(matches: number): number {
     switch (matches) {
       case 0:
-        return 0;
+        return this.fanscoreManager.config?.lottery_reward_0_match ?? 0;
       case 1:
-        return 10;
+        return this.fanscoreManager.config?.lottery_reward_1_match ?? 10;
       case 2:
-        return 100;
+        return this.fanscoreManager.config?.lottery_reward_2_match ?? 100;
       case 3:
-        return 1000;
+        return this.fanscoreManager.config?.lottery_reward_3_match ?? 1000;
       default:
         return 0;
     }

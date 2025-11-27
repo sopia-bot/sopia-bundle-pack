@@ -17,29 +17,29 @@ const fileOperationQueues = new Map<string, Promise<any>>();
 async function queueFileOperation<T>(filename: string, operation: () => T | Promise<T>): Promise<T> {
   // 해당 파일의 마지막 작업 가져오기
   const lastOperation = fileOperationQueues.get(filename) || Promise.resolve();
-  
+
   // 새 작업을 체이닝
   const newOperation = lastOperation
     .then(() => operation())
     .catch((error) => {
       // 이전 작업의 에러는 로깅만 하고 현재 작업은 계속 진행
-      logger.warn('Previous file operation failed', { 
-        filename, 
-        error: error?.message || 'Unknown error' 
+      logger.warn('Previous file operation failed', {
+        filename,
+        error: error?.message || 'Unknown error'
       });
       return operation();
     });
-  
+
   // 큐에 새 작업 저장
   fileOperationQueues.set(filename, newOperation);
-  
+
   // 작업 완료 후 큐에서 제거 (메모리 관리)
   newOperation.finally(() => {
     if (fileOperationQueues.get(filename) === newOperation) {
       fileOperationQueues.delete(filename);
     }
   });
-  
+
   return newOperation;
 }
 
@@ -47,7 +47,7 @@ async function queueFileOperation<T>(filename: string, operation: () => T | Prom
 export const defaultData = {
   fanscore: [
   ],
-  
+
   'fanscore-config': {
     enabled: true,
     attendance_score: 10,
@@ -60,9 +60,13 @@ export const defaultData = {
     quiz_timeout: 5,
     lottery_enabled: false,
     lottery_spoon_required: 50,
+    lottery_reward_0_match: 0,
+    lottery_reward_1_match: 10,
+    lottery_reward_2_match: 100,
+    lottery_reward_3_match: 1000,
     show_score: true
   },
-  
+
   templates: [
     {
       template_id: "default-1",
@@ -80,7 +84,7 @@ export const defaultData = {
       ]
     }
   ],
-  
+
   'roulette-history': [],
 
   // 사용자별 룰렛 티켓 및 킵 아이템
@@ -90,7 +94,7 @@ export const defaultData = {
   },
 
   quiz: [],
-  
+
   shield: {
     shield_count: 0,
     history: []
@@ -310,13 +314,13 @@ export function ensureDataDirectory(): void {
  */
 export function ensureDataFile(filename: string, defaultContent: any): boolean {
   const filePath = path.join(dataDir, filename);
-  
+
   if (!fs.existsSync(filePath)) {
-    logger.info('Initializing data file with default content', { 
-      filename, 
-      filePath 
+    logger.info('Initializing data file with default content', {
+      filename,
+      filePath
     });
-    
+
     try {
       fs.writeFileSync(filePath, JSON.stringify(defaultContent, null, 2), 'utf8');
       logger.info('Data file initialized successfully', { filename });
@@ -331,7 +335,7 @@ export function ensureDataFile(filename: string, defaultContent: any): boolean {
       throw error;
     }
   }
-  
+
   return true; // 이미 존재함
 }
 
@@ -343,7 +347,7 @@ export function ensureDataFile(filename: string, defaultContent: any): boolean {
 export async function readJsonFile(filename: string): Promise<any> {
   return queueFileOperation(filename, () => {
     const filePath = path.join(dataDir, filename);
-    
+
     try {
       const content = fs.readFileSync(filePath, 'utf8');
       return JSON.parse(content);
@@ -367,7 +371,7 @@ export async function readJsonFile(filename: string): Promise<any> {
 export async function writeJsonFile(filename: string, data: any): Promise<void> {
   return queueFileOperation(filename, () => {
     const filePath = path.join(dataDir, filename);
-    
+
     try {
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
       logger.debug('JSON file written successfully', { filename });
@@ -388,15 +392,15 @@ export async function writeJsonFile(filename: string, data: any): Promise<void> 
  */
 export function initializeAllDataFiles(): void {
   logger.info('Initializing all data files');
-  
+
   ensureDataDirectory();
-  
+
   // 각 데이터 파일 초기화
   Object.entries(defaultData).forEach(([key, value]) => {
     const filename = key.includes('-') ? `${key}.json` : `${key}.json`;
     ensureDataFile(filename, value);
   });
-  
+
   logger.info('All data files initialized');
 }
 
@@ -407,10 +411,10 @@ export function initializeAllDataFiles(): void {
  */
 export async function getDataFile(dataType: keyof typeof defaultData): Promise<any> {
   const filename = dataType.includes('-') ? `${dataType}.json` : `${dataType}.json`;
-  
+
   // 파일이 없으면 기본 데이터로 초기화
   ensureDataFile(filename, defaultData[dataType]);
-  
+
   // 파일 읽기 (큐 사용)
   return readJsonFile(filename);
 }

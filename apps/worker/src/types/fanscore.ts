@@ -30,6 +30,10 @@ export interface FanscoreConfig {
   quiz_timeout: number;
   lottery_enabled: boolean;
   lottery_spoon_required: number;
+  lottery_reward_0_match: number;
+  lottery_reward_1_match: number;
+  lottery_reward_2_match: number;
+  lottery_reward_3_match: number;
 }
 
 export interface Quiz {

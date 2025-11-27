@@ -10,7 +10,7 @@ const DOMAIN = 'starter-pack.sopia.dev';
 export class FanscoreManager {
   private pendingUpdates: Map<number, PendingUpdate> = new Map();
   private userCache: Map<number, FanscoreUser> = new Map();
-  private config: FanscoreConfig | null = null;
+  public config: FanscoreConfig | null = null;
   private batchInterval: NodeJS.Timeout | null = null;
   private currentLiveId: number = 0;
 

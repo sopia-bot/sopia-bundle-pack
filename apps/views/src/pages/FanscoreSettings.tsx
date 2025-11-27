@@ -23,6 +23,10 @@ interface FanscoreConfig {
   quiz_timeout: number;
   lottery_enabled: boolean;
   lottery_spoon_required: number;
+  lottery_reward_0_match: number;
+  lottery_reward_1_match: number;
+  lottery_reward_2_match: number;
+  lottery_reward_3_match: number;
 }
 
 interface YachtConfig {
@@ -53,6 +57,10 @@ export function FanscoreSettings() {
     quiz_timeout: 5,
     lottery_enabled: false,
     lottery_spoon_required: 50,
+    lottery_reward_0_match: 0,
+    lottery_reward_1_match: 10,
+    lottery_reward_2_match: 100,
+    lottery_reward_3_match: 1000,
   });
 
   const [saved, setSaved] = useState(false);
@@ -114,48 +122,68 @@ export function FanscoreSettings() {
   const saveConfig = async () => {
     // 유효성 검사
     const validatedConfig = { ...config };
-    
+
     // 숫자 필드 검증 및 기본값 설정
     if (isNaN(validatedConfig.attendance_score) || validatedConfig.attendance_score < 0) {
       validatedConfig.attendance_score = 10;
       toast.warning('출석 점수가 유효하지 않아 기본값(10)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.chat_score) || validatedConfig.chat_score < 0) {
       validatedConfig.chat_score = 1;
       toast.warning('채팅 점수가 유효하지 않아 기본값(1)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.like_score) || validatedConfig.like_score < 0) {
       validatedConfig.like_score = 10;
       toast.warning('좋아요 점수가 유효하지 않아 기본값(10)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.spoon_score) || validatedConfig.spoon_score < 0) {
       validatedConfig.spoon_score = 100;
       toast.warning('스푼 점수가 유효하지 않아 기본값(100)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.quiz_bonus) || validatedConfig.quiz_bonus < 0) {
       validatedConfig.quiz_bonus = 10;
       toast.warning('퀴즈 보너스가 유효하지 않아 기본값(10)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.quiz_interval) || validatedConfig.quiz_interval < 30) {
       validatedConfig.quiz_interval = 180;
       toast.warning('퀴즈 간격이 유효하지 않아 기본값(180초)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.quiz_timeout) || validatedConfig.quiz_timeout < 1) {
       validatedConfig.quiz_timeout = 5;
       toast.warning('퀴즈 입력 시간이 유효하지 않아 기본값(5초)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.lottery_spoon_required) || validatedConfig.lottery_spoon_required < 1) {
       validatedConfig.lottery_spoon_required = 50;
       toast.warning('복권 스푼 개수가 유효하지 않아 기본값(50)으로 설정되었습니다.');
     }
-    
+
+    if (isNaN(validatedConfig.lottery_reward_0_match)) {
+      validatedConfig.lottery_reward_0_match = 0;
+      toast.warning('0개 적중 점수가 유효하지 않아 기본값(0)으로 설정되었습니다.');
+    }
+
+    if (isNaN(validatedConfig.lottery_reward_1_match)) {
+      validatedConfig.lottery_reward_1_match = 10;
+      toast.warning('1개 적중 점수가 유효하지 않아 기본값(10)으로 설정되었습니다.');
+    }
+
+    if (isNaN(validatedConfig.lottery_reward_2_match)) {
+      validatedConfig.lottery_reward_2_match = 100;
+      toast.warning('2개 적중 점수가 유효하지 않아 기본값(100)으로 설정되었습니다.');
+    }
+
+    if (isNaN(validatedConfig.lottery_reward_3_match)) {
+      validatedConfig.lottery_reward_3_match = 1000;
+      toast.warning('3개 적중 점수가 유효하지 않아 기본값(1000)으로 설정되었습니다.');
+    }
+
     try {
       await fetch('stp://starter-pack.sopia.dev/fanscore/config', {
         method: 'POST',
@@ -286,22 +314,22 @@ export function FanscoreSettings() {
 
   const saveYachtConfig = async () => {
     const validatedConfig = { ...yachtConfig };
-    
+
     if (isNaN(validatedConfig.winning_score) || validatedConfig.winning_score < 1) {
       validatedConfig.winning_score = 50;
       toast.warning('승리 점수가 유효하지 않아 기본값(50점)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.score_multiplier) || validatedConfig.score_multiplier < 1) {
       validatedConfig.score_multiplier = 100;
       toast.warning('점수 배수가 유효하지 않아 기본값(100)으로 설정되었습니다.');
     }
-    
+
     if (isNaN(validatedConfig.game_cooldown) || validatedConfig.game_cooldown < 1) {
       validatedConfig.game_cooldown = 60;
       toast.warning('게임 간격이 유효하지 않아 기본값(60초)으로 설정되었습니다.');
     }
-    
+
     try {
       await fetch('stp://starter-pack.sopia.dev/yacht/config', {
         method: 'POST',
@@ -690,6 +718,102 @@ export function FanscoreSettings() {
                 </div>
                 <p className="text-gray-500 text-sm">청취자가 이 개수만큼 스푼을 선물하면 복권이 1장 지급됩니다</p>
               </div>
+
+
+              {/* Reward Settings Section */}
+              <div className="space-y-4 mt-6">
+                <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  🎁 당첨 보상
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* 0 Match (꽝) */}
+                  <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-full bg-red-500/20">
+                        <span className="text-xl">❌</span>
+                      </div>
+                      <Label htmlFor="lottery-reward-0" className="text-base font-semibold text-red-900">0개 적중</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="lottery-reward-0"
+                        type="number"
+                        value={config.lottery_reward_0_match}
+                        onChange={(e) => setConfig({ ...config, lottery_reward_0_match: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                        disabled={!config.enabled}
+                        className="flex-1 bg-white/80 border-red-300 focus:border-red-500"
+                      />
+                      <span className="text-red-700 font-medium">점</span>
+                    </div>
+                  </div>
+
+                  {/* 1 Match */}
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-full bg-amber-500/20">
+                        <span className="text-xl">🎲</span>
+                      </div>
+                      <Label htmlFor="lottery-reward-1" className="text-base font-semibold text-amber-900">1개 적중</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="lottery-reward-1"
+                        type="number"
+                        value={config.lottery_reward_1_match}
+                        onChange={(e) => setConfig({ ...config, lottery_reward_1_match: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                        disabled={!config.enabled}
+                        className="flex-1 bg-white/80 border-amber-300 focus:border-amber-500"
+                      />
+                      <span className="text-amber-700 font-medium">점</span>
+                    </div>
+                  </div>
+
+                  {/* 2 Matches */}
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-full bg-blue-500/20">
+                        <span className="text-xl">🎯</span>
+                      </div>
+                      <Label htmlFor="lottery-reward-2" className="text-base font-semibold text-blue-900">2개 적중</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="lottery-reward-2"
+                        type="number"
+                        value={config.lottery_reward_2_match}
+                        onChange={(e) => setConfig({ ...config, lottery_reward_2_match: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                        disabled={!config.enabled}
+                        className="flex-1 bg-white/80 border-blue-300 focus:border-blue-500"
+                      />
+                      <span className="text-blue-700 font-medium">점</span>
+                    </div>
+                  </div>
+
+                  {/* 3 Matches */}
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-full bg-purple-500/20">
+                        <span className="text-xl">✨</span>
+                      </div>
+                      <Label htmlFor="lottery-reward-3" className="text-base font-semibold text-purple-900">3개 적중</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="lottery-reward-3"
+                        type="number"
+                        value={config.lottery_reward_3_match}
+                        onChange={(e) => setConfig({ ...config, lottery_reward_3_match: e.target.value === '' ? '' as any : parseFloat(e.target.value) })}
+                        disabled={!config.enabled}
+                        className="flex-1 bg-white/80 border-purple-300 focus:border-purple-500"
+                      />
+                      <span className="text-purple-700 font-medium">점</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-600 text-sm bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  💡 <span className="font-medium">팁:</span> 각 적중 개수별로 지급할 점수를 설정합니다. 음수를 입력하면 점수가 차감됩니다.
+                </p>
+              </div>
             </CardContent>
           )}
         </Card>
@@ -806,7 +930,7 @@ export function FanscoreSettings() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>취소</AlertDialogCancel>
-                          <AlertDialogAction 
+                          <AlertDialogAction
                             onClick={clearYachtCooldowns}
                             disabled={clearingCooldown}
                             className="bg-orange-600 hover:bg-orange-700"
