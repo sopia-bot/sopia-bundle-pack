@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { Layout } from '../components/Layout';
-import { Users, Trophy, Ticket, Award, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, Check, RotateCcw, AlertTriangle, UserCog } from 'lucide-react';
+import { Users, Trophy, Ticket, Award, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsUpDown, Check, RotateCcw, AlertTriangle, UserCog, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,23 +69,23 @@ interface Template {
 export function UserManagement() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Table states
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
-  
+
   // Filters
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [levelOperator, setLevelOperator] = useState<'gte' | 'lte'>('gte');
   const [levelValue, setLevelValue] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  
+
   // Combobox state
   const [userComboboxOpen, setUserComboboxOpen] = useState(false);
-  
+
   // Ticket grant dialog states
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [selectedUserForTicket, setSelectedUserForTicket] = useState<UserData | null>(null);
@@ -93,13 +93,13 @@ export function UserManagement() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [ticketCount, setTicketCount] = useState<string>('1');
   const [grantingTicket, setGrantingTicket] = useState(false);
-  
+
   // Lottery grant dialog states
   const [lotteryDialogOpen, setLotteryDialogOpen] = useState(false);
   const [selectedUserForLottery, setSelectedUserForLottery] = useState<UserData | null>(null);
   const [lotteryCount, setLotteryCount] = useState<string>('1');
   const [grantingLottery, setGrantingLottery] = useState(false);
-  
+
   // Roulette record dialog states
   const [rouletteRecordDialogOpen, setRouletteRecordDialogOpen] = useState(false);
   const [selectedUserForRecord, setSelectedUserForRecord] = useState<UserData | null>(null);
@@ -109,7 +109,7 @@ export function UserManagement() {
   const [templateItems, setTemplateItems] = useState<any[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [addingRecord, setAddingRecord] = useState(false);
-  
+
   // Reset dialog states
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetCategories, setResetCategories] = useState({
@@ -132,6 +132,15 @@ export function UserManagement() {
   const [changingAccount, setChangingAccount] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [accountChangeConfirmOpen, setAccountChangeConfirmOpen] = useState(false);
+
+  // User delete dialog states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedUserForDelete, setSelectedUserForDelete] = useState<UserData | null>(null);
+  const [deleteOptions, setDeleteOptions] = useState({
+    fanscore: true,
+    roulette: true,
+  });
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -183,7 +192,7 @@ export function UserManagement() {
 
     try {
       setGrantingTicket(true);
-      
+
       const template = templates.find(t => t.template_id === selectedTemplate);
       if (!template) {
         toast.error('템플릿을 찾을 수 없습니다.');
@@ -328,7 +337,7 @@ export function UserManagement() {
 
     try {
       setAddingRecord(true);
-      
+
       const selectedItem = templateItems[itemIndex];
       let addedCount = 0;
 
@@ -444,27 +453,27 @@ export function UserManagement() {
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    
+
     // 이전 타이머 취소
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
-    
+
     // 빈 값이면 즉시 결과 초기화
     if (!value.trim()) {
       setSearchResults([]);
       setSearching(false);
       return;
     }
-    
+
     // 200ms 후에 검색 실행 (디바운싱)
     const timeout = setTimeout(() => {
       searchUsers(value);
     }, 200);
-    
+
     setSearchTimeout(timeout);
   };
-  
+
   // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
     return () => {
@@ -516,7 +525,7 @@ export function UserManagement() {
       if (updateResponse.ok) {
         const result = await updateResponse.json();
         const historyUpdated = result.rouletteHistoryUpdated || 0;
-        const message = historyUpdated > 0 
+        const message = historyUpdated > 0
           ? `계정이 변경되었습니다. (${selectedUserForAccountChange.nickname} → ${selectedNewUser.nickname})\n룰렛 기록 ${historyUpdated}개 업데이트됨`
           : `계정이 변경되었습니다. (${selectedUserForAccountChange.nickname} → ${selectedNewUser.nickname})`;
         toast.success(message);
@@ -536,6 +545,60 @@ export function UserManagement() {
       toast.error('계정 변경에 실패했습니다.');
     } finally {
       setChangingAccount(false);
+    }
+  };
+
+  const openDeleteDialog = (user: UserData) => {
+    setSelectedUserForDelete(user);
+    setDeleteOptions({ fanscore: true, roulette: true });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleUserDelete = async () => {
+    if (!selectedUserForDelete) {
+      toast.error('삭제할 사용자를 선택해주세요.');
+      return;
+    }
+
+    const selectedCategories = Object.entries(deleteOptions)
+      .filter(([_, checked]) => checked)
+      .map(([key]) => key);
+
+    if (selectedCategories.length === 0) {
+      toast.error('최소 하나의 카테고리를 선택해주세요.');
+      return;
+    }
+
+    try {
+      setDeleting(true);
+
+      const response = await fetch(`stp://starter-pack.sopia.dev/fanscore/user/${selectedUserForDelete.user_id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          categories: selectedCategories,
+        }),
+      });
+
+      if (response.ok) {
+        const categoriesText = selectedCategories
+          .map(c => c === 'fanscore' ? '애청지수' : '룰렛')
+          .join(', ');
+        toast.success(`${selectedUserForDelete.nickname}님의 ${categoriesText} 데이터가 삭제되었습니다.`);
+        setDeleteDialogOpen(false);
+        setSelectedUserForDelete(null);
+        setDeleteOptions({ fanscore: true, roulette: true });
+        fetchUsers(); // 목록 새로고침
+      } else {
+        throw new Error('Failed to delete user data');
+      }
+    } catch (error) {
+      console.error('Failed to delete user data:', error);
+      toast.error('사용자 데이터 삭제에 실패했습니다.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -600,7 +663,7 @@ export function UserManagement() {
         const activityDate = new Date(user.last_activity_at);
         const start = startDate ? new Date(startDate) : null;
         const end = endDate ? new Date(endDate) : new Date();
-        
+
         if (start && activityDate < start) return false;
         if (activityDate > end) return false;
       }
@@ -615,8 +678,8 @@ export function UserManagement() {
       totalUsers: users.length,
       totalRoulette: users.reduce((sum, user) => sum + (user.roulette_tickets || 0), 0),
       totalLottery: users.reduce((sum, user) => sum + (user.lottery_tickets || 0), 0),
-      averageScore: users.length > 0 
-        ? Math.round(users.reduce((sum, user) => sum + user.score, 0) / users.length) 
+      averageScore: users.length > 0
+        ? Math.round(users.reduce((sum, user) => sum + user.score, 0) / users.length)
         : 0,
     };
   }, [users]);
@@ -641,12 +704,11 @@ export function UserManagement() {
       cell: ({ row }) => {
         const rank = row.getValue('rank') as number;
         return (
-          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
-            rank === 1 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white' :
+          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${rank === 1 ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-white' :
             rank === 2 ? 'bg-gradient-to-r from-gray-300 to-gray-500 text-white' :
-            rank === 3 ? 'bg-gradient-to-r from-orange-400 to-orange-600 text-white' :
-            'bg-gray-100 text-gray-600'
-          }`}>
+              rank === 3 ? 'bg-gradient-to-r from-orange-400 to-orange-600 text-white' :
+                'bg-gray-100 text-gray-600'
+            }`}>
             {rank}
           </span>
         );
@@ -690,15 +752,14 @@ export function UserManagement() {
       cell: ({ row }) => {
         const level = row.getValue('level') as number;
         return (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            level >= 7 ? 'bg-purple-100 text-purple-800' :
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${level >= 7 ? 'bg-purple-100 text-purple-800' :
             level >= 6 ? 'bg-blue-100 text-blue-800' :
-            level >= 5 ? 'bg-emerald-100 text-emerald-800' :
-            level >= 4 ? 'bg-green-100 text-green-800' :
-            level >= 3 ? 'bg-yellow-100 text-yellow-800' :
-            level >= 2 ? 'bg-orange-100 text-orange-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
+              level >= 5 ? 'bg-emerald-100 text-emerald-800' :
+                level >= 4 ? 'bg-green-100 text-green-800' :
+                  level >= 3 ? 'bg-yellow-100 text-yellow-800' :
+                    level >= 2 ? 'bg-orange-100 text-orange-800' :
+                      'bg-gray-100 text-gray-800'
+            }`}>
             Lv.{level}
           </span>
         );
@@ -835,9 +896,8 @@ export function UserManagement() {
         const tickets = row.getValue('roulette_tickets') as number;
         return (
           <div className="flex justify-center">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              tickets > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-            }`}>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tickets > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+              }`}>
               {tickets}장
             </span>
           </div>
@@ -851,9 +911,8 @@ export function UserManagement() {
         const tickets = row.getValue('lottery_tickets') as number;
         return (
           <div className="flex justify-center">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              tickets > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
-            }`}>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tickets > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+              }`}>
               {tickets}장
             </span>
           </div>
@@ -913,6 +972,15 @@ export function UserManagement() {
             >
               <UserCog className="h-4 w-4 mr-1" />
               계정 변경
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openDeleteDialog(row.original)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              삭제
             </Button>
           </div>
         );
@@ -1196,9 +1264,9 @@ export function UserManagement() {
                               {header.isPlaceholder
                                 ? null
                                 : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
                             </TableHead>
                           ))}
                         </TableRow>
@@ -1234,7 +1302,7 @@ export function UserManagement() {
                     </TableBody>
                   </Table>
                 </div>
-                
+
                 {/* Pagination */}
                 <div className="flex items-center justify-between space-x-2 py-4">
                   <div className="text-sm text-gray-600">
@@ -1661,9 +1729,8 @@ export function UserManagement() {
                       <div
                         key={user.id}
                         onClick={() => setSelectedNewUser(user)}
-                        className={`p-3 cursor-pointer border-b last:border-b-0 hover:bg-gray-50 transition-colors ${
-                          selectedNewUser?.id === user.id ? 'bg-purple-50 border-purple-200' : ''
-                        }`}
+                        className={`p-3 cursor-pointer border-b last:border-b-0 hover:bg-gray-50 transition-colors ${selectedNewUser?.id === user.id ? 'bg-purple-50 border-purple-200' : ''
+                          }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -1824,6 +1891,123 @@ export function UserManagement() {
                 className="bg-amber-600 hover:bg-amber-700"
               >
                 {changingAccount ? '변경 중...' : '확인'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* User Delete Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-2xl font-bold text-red-600">
+                <Trash2 className="h-6 w-6" />
+                사용자 데이터 삭제
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                {selectedUserForDelete && (
+                  <span>
+                    <span className="font-semibold text-gray-900">{selectedUserForDelete.nickname}</span>님의 데이터를 삭제합니다
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              {/* Current User Info */}
+              {selectedUserForDelete && (
+                <Card className="border border-gray-200 bg-gray-50">
+                  <CardContent className="p-4">
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">닉네임:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForDelete.nickname}</span>
+                      </div>
+                      {selectedUserForDelete.tag && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">고유닉:</span>
+                          <span className="font-mono text-gray-900">@{selectedUserForDelete.tag}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">사용자 ID:</span>
+                        <span className="font-semibold text-gray-900">{selectedUserForDelete.user_id}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Delete Options */}
+              <div className="space-y-3">
+                <Label className="text-base font-semibold text-gray-900">삭제할 데이터 선택</Label>
+                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-3">
+                    <Switch
+                      id="delete-fanscore"
+                      checked={deleteOptions.fanscore}
+                      onCheckedChange={(checked) => setDeleteOptions({ ...deleteOptions, fanscore: checked })}
+                      className="data-[state=checked]:bg-red-600"
+                    />
+                    <Label htmlFor="delete-fanscore" className="text-sm font-medium text-gray-900 cursor-pointer">
+                      애청지수 데이터
+                    </Label>
+                  </div>
+                  <p className="text-xs text-gray-500 ml-11">
+                    레벨, 점수, 순위, 채팅/좋아요 횟수, 복권 티켓 등의 모든 애청지수 관련 데이터가 삭제됩니다.
+                  </p>
+
+                  <div className="flex items-center space-x-3">
+                    <Switch
+                      id="delete-roulette"
+                      checked={deleteOptions.roulette}
+                      onCheckedChange={(checked) => setDeleteOptions({ ...deleteOptions, roulette: checked })}
+                      className="data-[state=checked]:bg-red-600"
+                    />
+                    <Label htmlFor="delete-roulette" className="text-sm font-medium text-gray-900 cursor-pointer">
+                      룰렛 데이터
+                    </Label>
+                  </div>
+                  <p className="text-xs text-gray-500 ml-11">
+                    룰렛 티켓, 당첨 기록, 킵 아이템 등의 모든 룰렛 관련 데이터가 삭제됩니다.
+                  </p>
+                </div>
+              </div>
+
+              {/* Warning */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-red-900">
+                      주의: 이 작업은 되돌릴 수 없습니다
+                    </p>
+                    <p className="text-xs text-red-700">
+                      삭제된 데이터는 복구할 수 없습니다. 신중하게 확인해주세요.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setSelectedUserForDelete(null);
+                  setDeleteOptions({ fanscore: true, roulette: true });
+                }}
+                disabled={deleting}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={handleUserDelete}
+                disabled={deleting || (!deleteOptions.fanscore && !deleteOptions.roulette)}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleting ? '삭제 중...' : '삭제'}
               </Button>
             </DialogFooter>
           </DialogContent>
