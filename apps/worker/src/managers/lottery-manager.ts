@@ -131,9 +131,9 @@ export class LotteryManager {
   }
 
   /**
-   * 자동 복권 (보유 티켓 전체 소진)
+   * 자동 복권 (보유 티켓 전체 소진 또는 지정된 수량)
    */
-  async playAuto(userId: number): Promise<{
+  async playAuto(userId: number, count?: number): Promise<{
     success: boolean;
     totalPlayed: number;
     totalReward: number;
@@ -165,7 +165,7 @@ export class LotteryManager {
         };
       }
 
-      const ticketCount = user.lottery_tickets;
+      const ticketCount = count ? Math.min(count, user.lottery_tickets) : user.lottery_tickets;
       const autoNumbers = [0, 1, 2];
       let totalReward = 0;
       const matchCounts = { 0: 0, 1: 0, 2: 0, 3: 0 };
@@ -222,10 +222,10 @@ export class LotteryManager {
    */
   private formatResult(drawn: number[], guessed: number[], matches: number, reward: number): string {
     return `[복권 결과]\\n` +
-           `당첨 번호: ${drawn.join(', ')}\\n` +
-           `선택 번호: ${guessed.join(', ')}\\n` +
-           `적중: ${matches}개\\n` +
-           `획득 점수: ${reward}점`;
+      `당첨 번호: ${drawn.join(', ')}\\n` +
+      `선택 번호: ${guessed.join(', ')}\\n` +
+      `적중: ${matches}개\\n` +
+      `획득 점수: ${reward}점`;
   }
 
   /**
@@ -237,14 +237,14 @@ export class LotteryManager {
     matchCounts: { 0: number; 1: number; 2: number; 3: number }
   ): string {
     let result = `[자동 복권 결과]\\n총 ${played}회 시행\\n\\n`;
-    
+
     if (matchCounts[3] > 0) result += `✨ 3개 적중 x ${matchCounts[3]}\\n`;
     if (matchCounts[2] > 0) result += `🎯 2개 적중 x ${matchCounts[2]}\\n`;
     if (matchCounts[1] > 0) result += `🎲 1개 적중 x ${matchCounts[1]}\\n`;
     if (matchCounts[0] > 0) result += `❌ 꽝 x ${matchCounts[0]}\\n`;
-    
+
     result += `\\n총 획득 점수: ${totalReward}점`;
-    
+
     return result;
   }
 }

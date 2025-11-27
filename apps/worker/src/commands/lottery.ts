@@ -50,8 +50,23 @@ export async function handleLottery(
 
   // 자동 복권
   if (args[0] === '자동') {
-    const result = await lotteryManager.playAuto(user.id);
-    
+    let count: number | undefined;
+    if (args[1]) {
+      const parsed = parseInt(args[1]);
+      if (!isNaN(parsed) && parsed > 0) {
+        count = parsed;
+      } else {
+        // 숫자가 아니거나 0 이하인 경우 에러 메시지
+        const message = commandTemplateManager
+          ? commandTemplateManager.getMessage('복권', 'error_invalid_count', variables, '❌ 수량은 1 이상의 숫자여야 합니다.')
+          : '❌ 수량은 1 이상의 숫자여야 합니다.';
+        await socket.message(message);
+        return;
+      }
+    }
+
+    const result = await lotteryManager.playAuto(user.id, count);
+
     if (!result.success) {
       await socket.message(`❌ ${result.message}`);
       return;
@@ -156,7 +171,7 @@ export async function handleGiveLottery(
 
       // 2. 등록된 사용자 목록 가져오기
       const response = await fetch(`stp://${DOMAIN}/fanscore/ranking`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
@@ -166,7 +181,7 @@ export async function handleGiveLottery(
 
       // 3. 방에 있는 청취자 중 등록된 사용자만 필터링
       const targetUsers = listeners.filter(listener => registeredUserIds.has(listener.id));
-      
+
       if (targetUsers.length === 0) {
         const message = commandTemplateManager
           ? commandTemplateManager.getMessage('복권지급', 'error_no_listeners', variables, '⚠️ 현재 방에 등록된 청취자가 없습니다.')
@@ -191,9 +206,9 @@ export async function handleGiveLottery(
 
     // 특정 유저 지급
     const targetTag = target;
-    
+
     const userResponse = await fetch(`stp://${DOMAIN}/fanscore/user-by-tag/${encodeURIComponent(targetTag)}`);
-    
+
     if (userResponse.status === 404) {
       const vars = { ...variables, target_tag: targetTag };
       const message = commandTemplateManager
@@ -261,7 +276,7 @@ export async function handleTransferLottery(
   try {
     // 본인 정보 확인
     const myResponse = await fetch(`stp://${DOMAIN}/fanscore/user/${user.id}`);
-    
+
     if (myResponse.status === 404) {
       const message = commandTemplateManager
         ? commandTemplateManager.getMessage('복권양도', 'error_not_registered', variables, '⚠️ 등록되지 않은 사용자입니다. "!내정보 생성"으로 등록해주세요.')
@@ -284,7 +299,7 @@ export async function handleTransferLottery(
 
     // 대상 사용자 찾기
     const targetResponse = await fetch(`stp://${DOMAIN}/fanscore/user-by-tag/${encodeURIComponent(targetTag)}`);
-    
+
     if (targetResponse.status === 404) {
       const vars = { ...variables, target_tag: targetTag };
       const message = commandTemplateManager
