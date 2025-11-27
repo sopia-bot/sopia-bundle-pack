@@ -20,7 +20,7 @@ interface RouletteTemplate {
   auto_run: boolean;
   enabled: boolean;
   items: Array<{
-    type: 'shield' | 'ticket' | 'custom';
+    type: 'shield' | 'ticket' | 'shop' | 'custom';
     label: string;
     percentage: number;
     value?: number;

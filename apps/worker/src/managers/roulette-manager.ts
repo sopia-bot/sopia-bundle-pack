@@ -1,11 +1,11 @@
 // apps/worker/src/managers/roulette-manager.ts
 
 import type { LiveSocket } from '@sopia-bot/core';
-import type { 
-  RouletteTemplate, 
-  TemplateItem, 
-  RouletteSpinResult, 
-  RouletteResult 
+import type {
+  RouletteTemplate,
+  TemplateItem,
+  RouletteSpinResult,
+  RouletteResult
 } from '../types/roulette';
 import type { FanscoreManager } from './fanscore-manager';
 
@@ -238,7 +238,7 @@ export class RouletteManager {
       // roulette-history에 저장 (꽝은 제외)
       for (const [label, { item, count }] of result.results.entries()) {
         if (label === '꽝') continue; // 꽝은 히스토리에 저장하지 않음
-        
+
         for (let i = 0; i < count; i++) {
           const historyRecord = {
             id: `roulette-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -250,8 +250,8 @@ export class RouletteManager {
               label: item.label,
               percentage: item.percentage
             },
-            // 실드와 복권은 즉시 사용되므로 used: true, 커스텀은 false
-            used: item.type === 'shield' || item.type === 'ticket',
+            // 실드와 복권, 상점은 즉시 사용되므로 used: true, 커스텀은 false
+            used: item.type === 'shield' || item.type === 'ticket' || item.type === 'shop',
             timestamp: new Date().toISOString()
           };
 
@@ -279,6 +279,10 @@ export class RouletteManager {
           // 복권: 즉시 지급 (킵에 저장하지 않음)
           const totalTickets = item.value * count;
           await this.giveLotteryTickets(userId, totalTickets, `룰렛 당첨: ${label} x${count}`);
+        } else if (item.type === 'shop' && item.value !== undefined) {
+          // 상점: 즉시 애청지수 반영 (킵에 저장하지 않음)
+          const totalScore = item.value * count;
+          await this.applyShopScore(userId, nickname, tag, totalScore, `룰렛 당첨: ${label} x${count}`);
         } else {
           // 커스텀 아이템: 킵에 저장
           const keepItem = {
@@ -323,7 +327,7 @@ export class RouletteManager {
 
       const data = await response.json();
       const currentShield = data.shield_count;
-      
+
       // 채팅으로 알림
       if (this.socket) {
         const sign = change >= 0 ? '+' : '';
@@ -339,6 +343,9 @@ export class RouletteManager {
   /**
    * 복권 지급 (pendingUpdates 사용)
    */
+  /**
+   * 복권 지급 (pendingUpdates 사용)
+   */
   private async giveLotteryTickets(userId: number, count: number, reason: string): Promise<void> {
     try {
       if (!this.fanscoreManager) {
@@ -346,26 +353,69 @@ export class RouletteManager {
         return;
       }
 
-      // 사용자 정보 조회
-      const userResponse = await fetch(`${API_BASE}/fanscore/user/${userId}`);
-      if (!userResponse.ok) {
+      // 사용자 정보 조회 (캐시 사용)
+      const userData = await this.fanscoreManager.loadUser(userId);
+      if (!userData) {
         throw new Error('User not found');
       }
-      const userData = await userResponse.json();
-      
-      // 복권 지급 (pendingUpdates 사용)
+
+      // 복권 지급 (pendingUpdates 사용 및 캐시 즉시 업데이트)
       this.fanscoreManager.updateLotteryTickets(userId, count, userData.nickname, userData.tag);
-      const newTickets = (userData.lottery_tickets || 0) + count;
-      
+
+      // 업데이트된 캐시 데이터 다시 조회 (또는 예측값 계산)
+      // updateLotteryTickets는 캐시를 즉시 업데이트하므로 loadUser로 다시 가져오면 반영되어 있음
+      const updatedUser = await this.fanscoreManager.loadUser(userId);
+      const newTickets = updatedUser?.lottery_tickets || 0;
+
       // 채팅으로 알림
       if (this.socket) {
-        const sign = count >= 0 ? '+' : '';
-        await this.socket.message(`[복권] ${userData.nickname}님, 복권이 ${sign}${count}개 지급되었습니다. (보유: ${newTickets}개)`);
+        if (count >= 0) {
+          await this.socket.message(`[복권] ${userData.nickname}님에게 복권 ${count}장 지급되었습니다. (보유: ${newTickets}개)`);
+        } else {
+          await this.socket.message(`[복권] ${userData.nickname}님의 복권 ${Math.abs(count)}장 차감되었습니다. (보유: ${newTickets}개)`);
+        }
       }
 
       console.log('[RouletteManager] Lottery tickets scheduled:', { userId, count, reason, expectedTickets: newTickets });
     } catch (error: any) {
       console.error('[RouletteManager] Failed to give lottery tickets:', error?.message);
+    }
+  }
+
+  /**
+   * 상점 점수 적용
+   */
+  private async applyShopScore(
+    userId: number,
+    nickname: string,
+    tag: string,
+    score: number,
+    reason: string
+  ): Promise<void> {
+    try {
+      if (!this.fanscoreManager) {
+        console.error('[RouletteManager] FanscoreManager not available for shop score');
+        return;
+      }
+
+      // User 객체 구성 (addExpDirect에 필요)
+      const user = {
+        id: userId,
+        nickname: nickname,
+        tag: tag
+      } as any;
+
+      this.fanscoreManager.addExpDirect(user, score);
+
+      // 채팅으로 알림
+      if (this.socket) {
+        const sign = score >= 0 ? '+' : '';
+        await this.socket.message(`[상점] ${nickname}님, 애청지수 ${sign}${score}점`);
+      }
+
+      console.log('[RouletteManager] Shop score applied:', { userId, score, reason });
+    } catch (error: any) {
+      console.error('[RouletteManager] Failed to apply shop score:', error?.message);
     }
   }
 

@@ -60,7 +60,7 @@ export class FanscoreManager {
    */
   async loadUser(userId: number): Promise<FanscoreUser | null> {
     try {
-      if ( this.userCache.has(userId) ) {
+      if (this.userCache.has(userId)) {
         return this.userCache.get(userId)!;
       }
       const response = await fetch(`stp://${DOMAIN}/fanscore/user/${userId}`);
@@ -110,7 +110,7 @@ export class FanscoreManager {
     const userData = this.userCache.get(userId);
     if (!userData) return false;
 
-    if ( this.currentLiveId === 0 ) return false;
+    if (this.currentLiveId === 0) return false;
 
     // 이미 출석했는지 확인
     if (userData.attendance_live_id === this.currentLiveId) {
@@ -220,7 +220,7 @@ export class FanscoreManager {
   private async updateUserRanksInCache() {
     try {
       const userIds = Array.from(this.userCache.keys());
-      
+
       // 캐시에 사용자가 없으면 리턴
       if (userIds.length === 0) return;
 
@@ -231,7 +231,7 @@ export class FanscoreManager {
           if (response.ok) {
             const updatedUser = await response.json();
             const cachedUser = this.userCache.get(userId);
-            
+
             if (cachedUser) {
               // rank 값만 업데이트 (다른 값은 캐시 유지)
               this.userCache.set(userId, {
@@ -244,7 +244,7 @@ export class FanscoreManager {
           console.error(`[FanscoreManager] Failed to update rank for user ${userId}:`, error);
         }
       }
-      
+
       console.log(`[FanscoreManager] Updated ranks for ${userIds.length} cached users`);
     } catch (error) {
       console.error('[FanscoreManager] Failed to update user ranks in cache:', error);
@@ -278,11 +278,11 @@ export class FanscoreManager {
         const newChatCount = user.chat_count + (pending.chat ? Math.floor(pending.chat / (this.config?.chat_score || 1)) : 0);
         const newLikeCount = user.like_count + (pending.like ? Math.floor(pending.like / (this.config?.like_score || 1)) : 0);
         const newSpoonCount = user.spoon_count + (pending.spoon ? Math.floor(pending.spoon / (this.config?.spoon_score || 1)) : 0);
-        
+
         // 복권 티켓 업데이트
-        const newLotteryTickets = pending.lotteryChange 
-          ? Math.max(0, user.lottery_tickets + pending.lotteryChange) 
-          : user.lottery_tickets;
+        // updateLotteryTickets에서 이미 캐시에 반영했으므로, 캐시 값을 그대로 사용
+        // (중복 적용 방지)
+        const newLotteryTickets = user.lottery_tickets;
 
         const update = {
           user_id: userId,
@@ -313,7 +313,7 @@ export class FanscoreManager {
           if (this.socket) {
             await this.socket.message(`🎉 ${user.nickname}님, 레벨업 하셨습니다! 현재 Lv.${levelInfo.level}`);
           }
-          
+
           // 복권 티켓 지급
           if (this.config?.lottery_enabled) {
             const levelUpCount = levelInfo.level - oldLevel;
@@ -332,7 +332,7 @@ export class FanscoreManager {
 
         if (response.ok) {
           console.log(`[FanscoreManager] Batch updated ${updates.length} users`);
-          
+
           // 배치 업데이트 후 rank 업데이트를 위해 캐시된 사용자 데이터 다시 로드
           await this.updateUserRanksInCache();
         } else {
@@ -360,7 +360,7 @@ export class FanscoreManager {
 
       // pendingUpdates에 추가 (processBatchUpdate에서 처리됨)
       this.updateLotteryTickets(userId, count, user.nickname, user.tag);
-      
+
       console.log(`[FanscoreManager] Lottery tickets scheduled to give to user ${userId}: +${count} (${reason})`);
     } catch (error) {
       console.error(`[FanscoreManager] Failed to give lottery tickets to user ${userId}:`, error);

@@ -4,7 +4,7 @@
  * 룰렛 템플릿 아이템
  */
 export interface TemplateItem {
-  type: 'shield' | 'ticket' | 'custom';
+  type: 'shield' | 'ticket' | 'shop' | 'custom';
   label: string;
   percentage: number;
   value?: number; // 실드/복권의 증감값
@@ -42,7 +42,7 @@ export interface UserRouletteTickets {
  */
 export interface KeepItem {
   id: string;
-  type: 'shield' | 'ticket' | 'custom';
+  type: 'shield' | 'ticket' | 'shop' | 'custom';
   label: string;
   count: number;
   percentage: number;
