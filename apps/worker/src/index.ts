@@ -65,27 +65,71 @@ loadConfigWithRetry();
 
 // 퀴즈 매니저 초기화
 const quizManager = new QuizManager();
-quizManager.initialize();
+async function initializeQuizManagerWithRetry() {
+    while (true) {
+        try {
+            await quizManager.initialize();
+            console.log('[Worker] Quiz manager initialized successfully');
+            break;
+        } catch (error) {
+            console.error('[Worker] Failed to initialize quiz manager:', error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+initializeQuizManagerWithRetry();
 
 // 복권 매니저 초기화 (fanscoreManager 주입)
 const lotteryManager = new LotteryManager(fanscoreManager);
 
 // 룰렛 매니저 초기화 (fanscoreManager 주입)
 const rouletteManager = new RouletteManager(fanscoreManager);
-rouletteManager.loadTemplates().then(() => {
-    console.log('[Worker] Roulette manager initialized');
-});
+async function initializeRouletteManagerWithRetry() {
+    while (true) {
+        try {
+            await rouletteManager.loadTemplates();
+            console.log('[Worker] Roulette manager initialized successfully');
+            break;
+        } catch (error) {
+            console.error('[Worker] Failed to initialize roulette manager:', error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+initializeRouletteManagerWithRetry();
 
 // 야추 매니저 초기화
 const yachtManager = new YachtManager(fanscoreManager);
-yachtManager.loadConfig();
+async function initializeYachtManagerWithRetry() {
+    while (true) {
+        try {
+            await yachtManager.loadConfig();
+            console.log('[Worker] Yacht manager initialized successfully');
+            break;
+        } catch (error) {
+            console.error('[Worker] Failed to initialize yacht manager:', error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+initializeYachtManagerWithRetry();
 (window as any).yachtManager = yachtManager;
 
 // 명령어 템플릿 매니저 초기화
 const commandTemplateManager = new CommandTemplateManager();
-commandTemplateManager.loadTemplates().then(() => {
-    console.log('[Worker] Command template manager initialized');
-});
+async function initializeCommandTemplateManagerWithRetry() {
+    while (true) {
+        try {
+            await commandTemplateManager.loadTemplates();
+            console.log('[Worker] Command template manager initialized successfully');
+            break;
+        } catch (error) {
+            console.error('[Worker] Failed to initialize command template manager:', error);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+initializeCommandTemplateManagerWithRetry();
 (window as any).commandTemplateManager = commandTemplateManager;
 
 // 명령어 레지스트리 초기화
@@ -195,17 +239,17 @@ async function liveMessage(evt: LiveMessageSocket, socket: LiveSocket): Promise<
     const message = evt.update_component.message.value.trim();
     const user = evt.data.user;
     console.log('starter_pack: liveMessage', user, message);
-    
+
     // 사용자 등록 여부 확인
     const isRegistered = await fanscoreManager.isUserRegistered(user.id);
 
     if (isRegistered) {
         // 출석 체크
         const attended = await fanscoreManager.checkAttendance(user);
-        if ( attended ) {
+        if (attended) {
             await socket.message(`🎉 ${user.nickname}님이 출석했습니다! (+${config?.attendance_score}점)`);
         }
-        
+
         // 채팅 점수 추가
         fanscoreManager.addChatScore(user);
 
@@ -233,7 +277,7 @@ async function liveMessage(evt: LiveMessageSocket, socket: LiveSocket): Promise<
                 isAdmin: isAdmin(user),
                 liveId: currentLiveId,
             });
-            
+
             if (!executed) {
                 console.log(`[명령어] 알 수 없는 명령어: ${parsed.command}`);
             }
@@ -253,7 +297,7 @@ async function livePresent(evt: LivePresentSocket, socket: LiveSocket): Promise<
 
     // 사용자 등록 여부 확인
     const isRegistered = await fanscoreManager.isUserRegistered(user.id);
-    
+
     if (isRegistered) {
         // 스푼 점수 추가
         fanscoreManager.addSpoonScore(user, totalAmount);
@@ -279,7 +323,7 @@ async function liveLike(evt: LiveLikeSocket, socket: LiveSocket): Promise<void> 
 
     // 사용자 등록 여부 확인
     const isRegistered = await fanscoreManager.isUserRegistered(user.id);
-    
+
     if (isRegistered) {
         // 좋아요 점수 추가
         fanscoreManager.addLikeScore(user);
@@ -392,7 +436,7 @@ async function processRouletteTicketGrantForLike(
 // 라이브 업데이트 핸들러
 async function liveUpdate(evt: LiveUpdateSocket, socket: LiveSocket): Promise<void> {
     managerIdList = evt.data.live.manager_ids;
-    
+
     // Live ID 설정
     const live = evt.data.live;
     if (live && live.id) {
@@ -404,7 +448,7 @@ async function liveUpdate(evt: LiveUpdateSocket, socket: LiveSocket): Promise<vo
 const DOMAIN = 'starter-pack.sopia.dev';
 function backgroundListener(event: any, data: { channel: string; data?: any }): void {
     if (!data || !data.channel) return;
-    
+
     switch (data.channel) {
         case 'message':
             break;
