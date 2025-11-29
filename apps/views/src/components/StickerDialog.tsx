@@ -105,7 +105,20 @@ export function StickerDialogButton({
       fetch('https://static.spooncast.net/kr/stickers/index.json')
         .then((res) => res.json())
         .then((data: StaticStickers) => {
-          setStickerList(data.categories);
+          const usedStickers = data.categories
+            .filter((category: StickerCategory) => category.is_used)
+            .map((category: StickerCategory) => ({
+              ...category,
+              stickers: category.stickers.filter((sticker: Sticker) => {
+                if (!sticker.start_date || !sticker.end_date) return sticker.is_used;
+                const start = new Date(sticker.start_date);
+                const end = new Date(sticker.end_date);
+                const now = new Date();
+                return now >= start && now <= end;
+              }),
+            }))
+            .filter((category: StickerCategory) => category.stickers.length > 0);
+          setStickerList(usedStickers);
           setLoading(false);
         })
         .catch((error) => {
@@ -177,7 +190,7 @@ export function StickerDialogButton({
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl min-h-[600px] max-h-[600px] overflow-hidden">
+      <DialogContent className="max-w-4xl min-w-[800px] min-h-[600px] max-h-[600px] overflow-hidden">
         <DialogHeader>
           <DialogTitle>스티커 선택</DialogTitle>
           <DialogDescription>
@@ -187,17 +200,19 @@ export function StickerDialogButton({
         
         <div className="flex-1 overflow-hidden">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-            <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
-              {stickerList.map((category) => (
-                <TabsTrigger 
-                  key={category.name} 
-                  value={category.name}
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm cursor-pointer hover:bg-background/50 hover:text-foreground"
-                >
-                  {category.title.replace(/[\b]/g, '')}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground">
+                {stickerList.map((category) => (
+                  <TabsTrigger 
+                    key={category.name} 
+                    value={category.name}
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm cursor-pointer hover:bg-background/50 hover:text-foreground"
+                  >
+                    {category.title.replace(/[\b]/g, '')}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
             
             {stickerList.map((category) => (
               <TabsContent 
