@@ -48,7 +48,7 @@ function safeBooleanData(data: any, defaultValue: boolean = false): boolean {
 async function validateAndFixFanscoreConfig() {
   try {
     const config = await getDataFile('fanscore-config');
-    
+
     const defaultConfig = {
       enabled: true,
       attendance_score: 10,
@@ -61,6 +61,10 @@ async function validateAndFixFanscoreConfig() {
       quiz_timeout: 5,
       lottery_enabled: true,
       lottery_spoon_required: 100,
+      lottery_reward_0_match: 0,
+      lottery_reward_1_match: 10,
+      lottery_reward_2_match: 100,
+      lottery_reward_3_match: 1000,
       show_score: true
     };
 
@@ -79,6 +83,10 @@ async function validateAndFixFanscoreConfig() {
       quiz_timeout: safeIntData(config.quiz_timeout, defaultConfig.quiz_timeout),
       lottery_enabled: safeBooleanData(config.lottery_enabled, defaultConfig.lottery_enabled),
       lottery_spoon_required: safeIntData(config.lottery_spoon_required, defaultConfig.lottery_spoon_required),
+      lottery_reward_0_match: safeIntData(config.lottery_reward_0_match, defaultConfig.lottery_reward_0_match),
+      lottery_reward_1_match: safeIntData(config.lottery_reward_1_match, defaultConfig.lottery_reward_1_match),
+      lottery_reward_2_match: safeIntData(config.lottery_reward_2_match, defaultConfig.lottery_reward_2_match),
+      lottery_reward_3_match: safeIntData(config.lottery_reward_3_match, defaultConfig.lottery_reward_3_match),
       show_score: safeBooleanData(config.show_score, defaultConfig.show_score)
     };
 

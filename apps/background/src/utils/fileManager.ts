@@ -405,7 +405,7 @@ export function initializeAllDataFiles(): void {
 }
 
 /**
- * 특정 데이터 파일 가져오기 (없으면 초기화)
+ * 특정 데이터 파일 가져오기 (없으면 초기화, 있으면 기본값과 병합)
  * @param dataType 데이터 타입
  * @returns JSON 데이터
  */
@@ -416,7 +416,19 @@ export async function getDataFile(dataType: keyof typeof defaultData): Promise<a
   ensureDataFile(filename, defaultData[dataType]);
 
   // 파일 읽기 (큐 사용)
-  return readJsonFile(filename);
+  const fileData = await readJsonFile(filename);
+
+  // 배열 타입은 병합하지 않음
+  if (Array.isArray(defaultData[dataType])) {
+    return fileData;
+  }
+
+  // 객체 타입인 경우 기본값과 병합 (새로 추가된 필드 지원)
+  if (typeof defaultData[dataType] === 'object' && defaultData[dataType] !== null) {
+    return { ...defaultData[dataType], ...fileData };
+  }
+
+  return fileData;
 }
 
 /**
