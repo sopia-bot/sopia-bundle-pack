@@ -26,6 +26,9 @@ let managerIdList: number[] = []
 // 현재 방송 ID 저장
 let currentLiveId: number = 0;
 
+// DJ 정보 저장
+let currentDjInfo: User | null = null;
+
 // 방송 관리자 여부 확인
 function isAdmin(author: User) {
     if (managerIdList.includes(author.id)) {
@@ -42,6 +45,7 @@ let config: FanscoreConfig | null = null;
 async function loadConfigWithRetry() {
     while (true) {
         try {
+            await new Promise((r) => setTimeout(r, 10000));
             const config_ = await fanscoreManager.loadConfig();
             // status: 404 체크
             if (config_ && typeof config_ === 'object' && 'status' in config_ && config_.status === 404) {
@@ -397,6 +401,72 @@ async function processRouletteTicketGrant(
 }
 
 /**
+ * 수동 룰렛 실행 처리
+ */
+async function handleManualRouletteSpin(data: {
+    templateId: string;
+    ticketCount: number;
+    targetUserId: number;
+    targetNickname: string;
+    targetTag: string;
+    applyEffects: boolean;
+    sendNotification: boolean;
+    isTargetInFanscore: boolean;
+}): Promise<void> {
+    const socket = (window as any).$sopia?.liveMap?.values().next().value?.socket as LiveSocket;
+    if (!socket) {
+        console.error('[ManualRoulette] Socket not available');
+        return;
+    }
+
+    try {
+        const { templateId, ticketCount, targetUserId, targetNickname, targetTag, applyEffects, sendNotification, isTargetInFanscore } = data;
+
+        console.log('[ManualRoulette] Starting manual roulette spin', {
+            templateId, ticketCount, targetUserId, targetNickname, applyEffects
+        });
+
+        // 룰렛 실행 (한 번에 모두 돌림, fanscore에 있는 경우에만 기록)
+        // applyEffects가 true이고 isTargetInFanscore가 true인 경우에만 saveHistory
+        const shouldSaveHistory = applyEffects && isTargetInFanscore;
+        const result = await rouletteManager.spinManual(
+            targetUserId,
+            targetNickname,
+            targetTag,
+            templateId,
+            ticketCount,
+            shouldSaveHistory
+        );
+
+        if (!result) {
+            console.error('[ManualRoulette] Failed to spin roulette');
+            if (sendNotification) {
+                await socket.message(`[수동 룰렛]\\n룰렛 실행에 실패했습니다.`);
+            }
+            return;
+        }
+
+        // 채팅 알림 (결과 정리해서 한 번에)
+        if (sendNotification) {
+            const message = rouletteManager.formatResult(targetNickname, result);
+            // "[닉네임님 룰렛 결과]" 를 "[수동 룰렛 - 닉네임님 결과]"로 변경
+            const formattedMessage = message.replace(
+                `[${targetNickname}님 룰렛 결과]`,
+                `[수동 룰렛 - ${targetNickname}님 결과]`
+            );
+            await socket.message(formattedMessage);
+        }
+
+        console.log('[ManualRoulette] Manual roulette completed', {
+            totalSpins: result.totalSpins,
+            resultsCount: result.results.size
+        });
+    } catch (error: any) {
+        console.error('[ManualRoulette] Error:', error?.message);
+    }
+}
+
+/**
  * 룰렛 티켓 지급 처리 (좋아요 이벤트)
  */
 async function processRouletteTicketGrantForLike(
@@ -442,6 +512,12 @@ async function liveUpdate(evt: LiveUpdateSocket, socket: LiveSocket): Promise<vo
     if (live && live.id) {
         currentLiveId = live.id;
         fanscoreManager.setLiveId(live.id);
+    }
+
+    // DJ 정보 저장
+    if (live && live.author) {
+        currentDjInfo = live.author;
+        console.log('[Worker] DJ info stored:', currentDjInfo.nickname, currentDjInfo.id);
     }
 }
 
@@ -499,6 +575,23 @@ function backgroundListener(event: any, data: { channel: string; data?: any }): 
             commandTemplateManager.reload().then(() => {
                 console.log('[Worker] Command templates reloaded');
             });
+            break;
+        case 'get-dj-info':
+            // DJ 정보 요청에 응답
+            ipcRenderer.send('starter-pack.sopia.dev-response', {
+                channel: 'dj-info',
+                data: currentDjInfo ? {
+                    id: currentDjInfo.id,
+                    nickname: currentDjInfo.nickname,
+                    tag: currentDjInfo.tag || currentDjInfo.nickname
+                } : null
+            });
+            break;
+        case 'manual-roulette-spin':
+            // 수동 룰렛 실행
+            if (data.data) {
+                handleManualRouletteSpin(data.data);
+            }
             break;
     }
 }

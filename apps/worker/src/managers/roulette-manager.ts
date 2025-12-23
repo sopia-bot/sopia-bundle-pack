@@ -35,19 +35,35 @@ export class RouletteManager {
   }
 
   /**
-   * 템플릿 로드
+   * 템플릿 로드 (성공할 때까지 재시도)
    */
   async loadTemplates(): Promise<void> {
-    try {
-      const response = await fetch(`${API_BASE}/templates`);
-      if (!response.ok) {
-        throw new Error(`Failed to load templates: ${response.statusText}`);
+    while (true) {
+      try {
+        const response = await fetch(`${API_BASE}/templates`);
+
+        if (!response.ok) {
+          console.log(`[RouletteManager] Templates API not ready (${response.status}), retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        const data = await response.json();
+
+        // 배열인지 확인 (에러 응답이 객체일 수 있음)
+        if (!Array.isArray(data)) {
+          console.log('[RouletteManager] Invalid templates response, retrying in 1 second...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        this.templates = data;
+        console.log('[RouletteManager] Templates loaded:', this.templates.length);
+        break;
+      } catch (error: any) {
+        console.error('[RouletteManager] Failed to load templates, retrying in 1 second...', error?.message);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      this.templates = await response.json();
-      console.log('[RouletteManager] Templates loaded:', this.templates.length);
-    } catch (error: any) {
-      console.error('[RouletteManager] Failed to load templates:', error?.message);
-      this.templates = [];
     }
   }
 
@@ -416,6 +432,47 @@ export class RouletteManager {
       console.log('[RouletteManager] Shop score applied:', { userId, score, reason });
     } catch (error: any) {
       console.error('[RouletteManager] Failed to apply shop score:', error?.message);
+    }
+  }
+
+  /**
+   * 수동 룰렛 실행 (티켓 검증 없이)
+   * @param userId 사용자 ID
+   * @param nickname 닉네임
+   * @param tag 고유닉
+   * @param templateId 템플릿 ID
+   * @param count 실행 횟수
+   * @param saveHistory 히스토리 저장 여부
+   * @returns 실행 결과
+   */
+  async spinManual(
+    userId: number,
+    nickname: string,
+    tag: string,
+    templateId: string,
+    count: number,
+    saveHistory: boolean
+  ): Promise<RouletteSpinResult | null> {
+    try {
+      // 템플릿 조회
+      const template = this.getTemplate(templateId);
+      if (!template) {
+        console.error('[RouletteManager] Template not found:', templateId);
+        return null;
+      }
+
+      // 룰렛 실행 (티켓 검증 없이)
+      const result = this.spinMultiple(template, count);
+
+      // 히스토리 저장 (옵션)
+      if (saveHistory) {
+        await this.saveWinnings(userId, nickname, tag, result);
+      }
+
+      return result;
+    } catch (error: any) {
+      console.error('[RouletteManager] Failed to spin manual roulette:', error?.message);
+      return null;
     }
   }
 

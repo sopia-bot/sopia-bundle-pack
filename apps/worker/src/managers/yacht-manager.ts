@@ -18,16 +18,35 @@ export class YachtManager {
   }
 
   /**
-   * 설정 로드
+   * 설정 로드 (성공할 때까지 재시도)
    */
   async loadConfig(): Promise<YachtConfig> {
-    try {
-      const response = await fetch(`stp://${DOMAIN}/yacht/config`);
-      if (response.ok) {
-        this.config = await response.json();
+    while (true) {
+      try {
+        const response = await fetch(`stp://${DOMAIN}/yacht/config`);
+
+        if (!response.ok) {
+          console.log(`[YachtManager] Config API not ready (${response.status}), retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        const data = await response.json();
+
+        // 유효한 config 객체인지 확인
+        if (!data || typeof data !== 'object' || 'error' in data) {
+          console.log('[YachtManager] Invalid config response, retrying in 1 second...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        this.config = data;
+        console.log('[YachtManager] Config loaded successfully');
+        break;
+      } catch (error) {
+        console.error('[YachtManager] Failed to load config, retrying in 1 second...', error);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    } catch (error) {
-      console.error('[YachtManager] Failed to load config:', error);
     }
     return this.config;
   }

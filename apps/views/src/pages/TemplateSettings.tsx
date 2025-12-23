@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/useAppStore';
 import { Layout } from '../components/Layout';
-import { Plus, Edit, Trash2, Save, X, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Download, Dices } from 'lucide-react';
 import { RouletteMigrationDialog } from '../components/RouletteMigrationDialog';
+import { ManualRouletteDialog } from '../components/ManualRouletteDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,8 @@ export function TemplateSettings() {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedSticker, setSelectedSticker] = useState<Sticker | null>(null);
   const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
+  const [manualRouletteDialogOpen, setManualRouletteDialogOpen] = useState(false);
+  const [selectedTemplateForManual, setSelectedTemplateForManual] = useState<Template | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -74,6 +77,11 @@ export function TemplateSettings() {
   const editTemplate = (template: Template) => {
     setEditingTemplate({ ...template });
     setIsEditing(true);
+  };
+
+  const openManualRoulette = (template: Template) => {
+    setSelectedTemplateForManual(template);
+    setManualRouletteDialogOpen(true);
   };
 
   const handleStickerSelect = (sticker: Sticker) => {
@@ -227,6 +235,15 @@ export function TemplateSettings() {
                       </CardDescription>
                     </div>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openManualRoulette(template)}
+                        className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                        title="수동 룰렛"
+                      >
+                        <Dices size={18} />
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -602,6 +619,13 @@ export function TemplateSettings() {
           onSuccess={() => {
             fetchTemplates();
           }}
+        />
+
+        {/* Manual Roulette Dialog */}
+        <ManualRouletteDialog
+          open={manualRouletteDialogOpen}
+          onOpenChange={setManualRouletteDialogOpen}
+          template={selectedTemplateForManual}
         />
       </div>
     </Layout >

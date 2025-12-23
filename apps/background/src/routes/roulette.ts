@@ -332,24 +332,24 @@ router.get('/history/:templateId', async (req, res) => {
 router.post('/spin/:templateId', async (req, res) => {
   try {
     const { templateId } = req.params;
-    const { userId, nickname } = req.body;
-    
-    logger.debug('Spinning roulette', { templateId, userId, nickname });
-    
+    const { userId, nickname, tag, isManual, recordHistory = true } = req.body;
+
+    logger.debug('Spinning roulette', { templateId, userId, nickname, isManual, recordHistory });
+
     // 템플릿 조회
     const templates = await getDataFile('templates');
     const template = templates.find((t: any) => t.template_id === templateId);
-    
+
     if (!template) {
       logger.warn('Template not found for roulette spin', { templateId });
       return res.status(404).json({ error: 'Template not found' });
     }
-    
+
     // 랜덤 아이템 선택
     const random = Math.random() * 100;
     let cumulativePercentage = 0;
     let selectedItem = null;
-    
+
     for (const item of template.items) {
       cumulativePercentage += item.percentage;
       if (random <= cumulativePercentage) {
@@ -357,12 +357,12 @@ router.post('/spin/:templateId', async (req, res) => {
         break;
       }
     }
-    
+
     // 아이템이 선택되지 않으면 꽝
     if (!selectedItem) {
       selectedItem = { type: 'none', label: '꽝', percentage: 0 };
     }
-    
+
     // 룰렛 기록 생성
     const historyId = `roulette-${Date.now()}`;
     const newRecord = {
@@ -370,25 +370,31 @@ router.post('/spin/:templateId', async (req, res) => {
       template_id: templateId,
       user_id: userId,
       nickname: nickname,
+      tag: tag || nickname,
       item: selectedItem,
       used: false,
+      is_manual: isManual || false,
       timestamp: new Date().toISOString()
     };
-    
-    // 기록 저장
-    const history = await getDataFile('roulette-history');
-    history.push(newRecord);
-    await saveDataFile('roulette-history', history);
-    
+
+    // 기록 저장 (recordHistory가 true인 경우에만)
+    if (recordHistory) {
+      const history = await getDataFile('roulette-history');
+      history.push(newRecord);
+      await saveDataFile('roulette-history', history);
+    }
+
     logger.info('Roulette spun successfully', {
       templateId,
       userId,
       nickname,
       selectedItem: selectedItem.label,
       percentage: selectedItem.percentage,
-      randomValue: random.toFixed(3)
+      randomValue: random.toFixed(3),
+      isManual,
+      recordHistory
     });
-    
+
     res.json(newRecord);
   } catch (error: any) {
     logger.error('Failed to spin roulette', {
@@ -398,6 +404,48 @@ router.post('/spin/:templateId', async (req, res) => {
       body: req.body
     });
     res.status(500).json({ error: 'Failed to spin roulette' });
+  }
+});
+
+// 수동 룰렛 실행 요청 (Worker에 전달)
+router.post('/manual-spin', async (req, res) => {
+  try {
+    const { templateId, ticketCount, targetUserId, targetNickname, targetTag, applyEffects, sendNotification, isTargetInFanscore } = req.body;
+
+    logger.debug('Manual roulette spin requested', {
+      templateId, ticketCount, targetUserId, targetNickname, applyEffects
+    });
+
+    // Worker에 수동 룰렛 실행 요청 전송
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window) {
+      window.webContents.send('starter-pack.sopia.dev', {
+        channel: 'manual-roulette-spin',
+        data: {
+          templateId,
+          ticketCount,
+          targetUserId,
+          targetNickname,
+          targetTag,
+          applyEffects,
+          sendNotification,
+          isTargetInFanscore
+        }
+      });
+
+      logger.info('Manual roulette spin request sent to worker', { templateId, targetNickname });
+      res.json({ success: true, message: 'Manual roulette spin request sent' });
+    } else {
+      logger.warn('No window available for manual roulette spin');
+      res.status(500).json({ error: 'Worker window not available' });
+    }
+  } catch (error: any) {
+    logger.error('Failed to request manual roulette spin', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined,
+      body: req.body
+    });
+    res.status(500).json({ error: 'Failed to request manual roulette spin' });
   }
 });
 

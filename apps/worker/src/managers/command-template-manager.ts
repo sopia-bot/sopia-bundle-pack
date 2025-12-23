@@ -28,22 +28,35 @@ export class CommandTemplateManager {
   private defaultTemplates: CommandTemplateData | null = null;
 
   /**
-   * 템플릿 로드
+   * 템플릿 로드 (성공할 때까지 재시도)
    */
   async loadTemplates(): Promise<void> {
-    try {
-      const response = await fetch(`stp://${DOMAIN}/command`);
-      
-      if (response.ok) {
-        this.templates = await response.json();
+    while (true) {
+      try {
+        const response = await fetch(`stp://${DOMAIN}/command`);
+
+        if (!response.ok) {
+          console.log(`[CommandTemplateManager] Command API not ready (${response.status}), retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        const data = await response.json();
+
+        // 유효한 템플릿 객체인지 확인
+        if (!data || typeof data !== 'object' || 'error' in data || !data.commands) {
+          console.log('[CommandTemplateManager] Invalid response, retrying in 1 second...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        this.templates = data;
         console.log('[CommandTemplateManager] Templates loaded successfully');
-      } else {
-        console.warn('[CommandTemplateManager] Failed to load templates, using defaults');
-        this.templates = null;
+        break;
+      } catch (error) {
+        console.error('[CommandTemplateManager] Error loading templates, retrying in 1 second...', error);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    } catch (error) {
-      console.error('[CommandTemplateManager] Error loading templates:', error);
-      this.templates = null;
     }
   }
 

@@ -33,28 +33,68 @@ export class QuizManager {
   }
 
   /**
-   * 퀴즈 목록 로드
+   * 퀴즈 목록 로드 (성공할 때까지 재시도)
    */
   private async loadQuizzes() {
-    try {
-      const response = await fetch(`stp://${DOMAIN}/quiz`);
-      this.quizzes = await response.json();
-      console.log(`[QuizManager] Loaded ${this.quizzes.length} quizzes`);
-    } catch (error) {
-      console.error('[QuizManager] Failed to load quizzes:', error);
-      this.quizzes = [];
+    while (true) {
+      try {
+        const response = await fetch(`stp://${DOMAIN}/quiz`);
+
+        if (!response.ok) {
+          console.log(`[QuizManager] Quiz API not ready (${response.status}), retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        const data = await response.json();
+
+        // 배열인지 확인 (에러 응답이 객체일 수 있음)
+        if (!Array.isArray(data)) {
+          console.log('[QuizManager] Invalid response format, retrying in 1 second...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        this.quizzes = data;
+        console.log(`[QuizManager] Loaded ${this.quizzes.length} quizzes`);
+        break;
+      } catch (error) {
+        console.error('[QuizManager] Failed to load quizzes, retrying in 1 second...', error);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
   }
 
   /**
-   * 설정 로드
+   * 설정 로드 (성공할 때까지 재시도)
    */
   private async loadConfig() {
-    try {
-      const response = await fetch(`stp://${DOMAIN}/fanscore/config`);
-      this.config = await response.json();
-    } catch (error) {
-      console.error('[QuizManager] Failed to load config:', error);
+    while (true) {
+      try {
+        const response = await fetch(`stp://${DOMAIN}/fanscore/config`);
+
+        if (!response.ok) {
+          console.log(`[QuizManager] Config API not ready (${response.status}), retrying in 1 second...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        const data = await response.json();
+
+        // 유효한 config 객체인지 확인
+        if (!data || typeof data !== 'object' || 'error' in data) {
+          console.log('[QuizManager] Invalid config response, retrying in 1 second...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
+
+        this.config = data;
+        console.log('[QuizManager] Config loaded successfully');
+        break;
+      } catch (error) {
+        console.error('[QuizManager] Failed to load config, retrying in 1 second...', error);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
   }
 
