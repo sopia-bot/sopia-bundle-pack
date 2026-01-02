@@ -185,8 +185,8 @@ export function UserManagement() {
     }
 
     const count = parseInt(ticketCount);
-    if (isNaN(count) || count <= 0) {
-      toast.error('올바른 티켓 개수를 입력해주세요.');
+    if (isNaN(count) || count === 0) {
+      toast.error('0이 아닌 숫자를 입력해주세요.');
       return;
     }
 
@@ -215,7 +215,8 @@ export function UserManagement() {
       });
 
       if (response.ok) {
-        toast.success(`${selectedUserForTicket.nickname}님에게 티켓 ${count}장이 지급되었습니다.`);
+        const action = count > 0 ? '지급' : '차감';
+        toast.success(`${selectedUserForTicket.nickname}님에게 티켓 ${Math.abs(count)}장이 ${action}되었습니다.`);
         setTicketDialogOpen(false);
         setSelectedUserForTicket(null);
         fetchUsers(); // 목록 새로고침
@@ -1378,14 +1379,13 @@ export function UserManagement() {
                 <Input
                   id="ticket-count"
                   type="number"
-                  min="1"
                   value={ticketCount}
                   onChange={(e) => setTicketCount(e.target.value)}
-                  placeholder="지급할 티켓 개수"
+                  placeholder="지급/차감할 티켓 개수 (음수 가능)"
                   className="mt-2"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  1 이상의 정수를 입력하세요
+                  양수: 지급 / 음수: 차감
                 </p>
               </div>
 

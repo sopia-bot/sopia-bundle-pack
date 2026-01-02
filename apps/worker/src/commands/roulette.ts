@@ -818,10 +818,10 @@ export async function handleGiveRouletteTickets(
   const template = templates[templateNumber - 1];
 
   // 갯수 유효성 검사
-  if (isNaN(count) || count <= 0) {
+  if (isNaN(count) || count === 0) {
     const message = commandTemplateManager
-      ? commandTemplateManager.getMessage('룰렛지급', 'error_invalid_count', variables, '❌ 갯수는 1 이상의 숫자여야 합니다.')
-      : '❌ 갯수는 1 이상의 숫자여야 합니다.';
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_invalid_count', variables, '❌ 갯수는 0이 아닌 숫자여야 합니다.')
+      : '❌ 갯수는 0이 아닌 숫자여야 합니다.';
     await socket.message(message);
     return;
   }
@@ -865,12 +865,14 @@ export async function handleGiveRouletteTickets(
         );
       }
 
-      const successVars = { ...variables, user_count: targetUsers.length, count, template_name: template.name };
+      const action = count > 0 ? '지급' : '차감';
+      const absCount = Math.abs(count);
+      const successVars = { ...variables, user_count: targetUsers.length, count: absCount, action, template_name: template.name };
       const message = commandTemplateManager
-        ? commandTemplateManager.getMessage('룰렛지급', 'success_all', successVars, `✅ 현재 방에 있는 ${targetUsers.length}명에게 ${template.name} 룰렛 티켓 ${count}장씩 지급했습니다.`)
-        : `✅ 현재 방에 있는 ${targetUsers.length}명에게 ${template.name} 룰렛 티켓 ${count}장씩 지급했습니다.`;
+        ? commandTemplateManager.getMessage('룰렛지급', 'success_all', successVars, `✅ 현재 방에 있는 ${targetUsers.length}명에게 ${template.name} 룰렛 티켓 ${absCount}장씩 ${action}했습니다.`)
+        : `✅ 현재 방에 있는 ${targetUsers.length}명에게 ${template.name} 룰렛 티켓 ${absCount}장씩 ${action}했습니다.`;
       await socket.message(message);
-      console.log(`[!룰렛 지급 전체] ${user.nickname} gave ${count} ${template.name} tickets to ${targetUsers.length} users`);
+      console.log(`[!룰렛 지급 전체] ${user.nickname} ${action} ${absCount} ${template.name} tickets to ${targetUsers.length} users`);
       return;
     }
 
@@ -899,12 +901,14 @@ export async function handleGiveRouletteTickets(
       count
     );
 
-    const successVars = { ...variables, target_nickname: targetUser.nickname, count, template_name: template.name };
+    const action = count > 0 ? '지급' : '차감';
+    const absCount = Math.abs(count);
+    const successVars = { ...variables, target_nickname: targetUser.nickname, count: absCount, action, template_name: template.name };
     const message = commandTemplateManager
-      ? commandTemplateManager.getMessage('룰렛지급', 'success', successVars, `✅ ${targetUser.nickname}님에게 ${template.name} 룰렛 티켓 ${count}장을 지급했습니다.`)
-      : `✅ ${targetUser.nickname}님에게 ${template.name} 룰렛 티켓 ${count}장을 지급했습니다.`;
+      ? commandTemplateManager.getMessage('룰렛지급', 'success', successVars, `✅ ${targetUser.nickname}님에게 ${template.name} 룰렛 티켓 ${absCount}장을 ${action}했습니다.`)
+      : `✅ ${targetUser.nickname}님에게 ${template.name} 룰렛 티켓 ${absCount}장을 ${action}했습니다.`;
     await socket.message(message);
-    console.log(`[!룰렛 지급] ${user.nickname} gave ${count} ${template.name} tickets to ${targetUser.nickname}`);
+    console.log(`[!룰렛 지급] ${user.nickname} ${action} ${absCount} ${template.name} tickets to ${targetUser.nickname}`);
   } catch (error) {
     console.error('[!룰렛 지급] Error:', error);
     const message = commandTemplateManager

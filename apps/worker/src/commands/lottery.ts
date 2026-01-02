@@ -155,10 +155,10 @@ export async function handleGiveLottery(
   const target = args[0];
   const count = parseInt(args[1]);
 
-  if (isNaN(count) || count <= 0) {
+  if (isNaN(count) || count === 0) {
     const message = commandTemplateManager
-      ? commandTemplateManager.getMessage('복권지급', 'error_invalid_count', variables, '❌ 갯수는 1 이상의 숫자여야 합니다.')
-      : '❌ 갯수는 1 이상의 숫자여야 합니다.';
+      ? commandTemplateManager.getMessage('복권지급', 'error_invalid_count', variables, '❌ 갯수는 0이 아닌 숫자여야 합니다.')
+      : '❌ 갯수는 0이 아닌 숫자여야 합니다.';
     await socket.message(message);
     return;
   }
@@ -196,12 +196,14 @@ export async function handleGiveLottery(
         fanscoreManager.updateLotteryTickets(listener.id, count, listener.nickname, listener.tag);
       }
 
-      const successVars = { ...variables, user_count: targetUsers.length, count };
+      const action = count > 0 ? '지급' : '차감';
+      const absCount = Math.abs(count);
+      const successVars = { ...variables, user_count: targetUsers.length, count: absCount, action };
       const message = commandTemplateManager
-        ? commandTemplateManager.getMessage('복권지급', 'success_all', successVars, `✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`)
-        : `✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${count}장씩 지급했습니다.`;
+        ? commandTemplateManager.getMessage('복권지급', 'success_all', successVars, `✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${absCount}장씩 ${action}했습니다.`)
+        : `✅ 현재 방에 있는 ${targetUsers.length}명에게 복권 ${absCount}장씩 ${action}했습니다.`;
       await socket.message(message);
-      console.log(`[!복권지급 전체] ${user.nickname} gave ${count} lottery tickets to ${targetUsers.length} users in the room`);
+      console.log(`[!복권지급 전체] ${user.nickname} ${action} ${absCount} lottery tickets to ${targetUsers.length} users in the room`);
       return;
     }
 
@@ -224,12 +226,14 @@ export async function handleGiveLottery(
     // 복권 지급 (pendingUpdates 사용)
     fanscoreManager.updateLotteryTickets(targetUser.user_id, count, targetUser.nickname, targetUser.tag);
 
-    const successVars = { ...variables, target_nickname: targetUser.nickname, count };
+    const action = count > 0 ? '지급' : '차감';
+    const absCount = Math.abs(count);
+    const successVars = { ...variables, target_nickname: targetUser.nickname, count: absCount, action };
     const message = commandTemplateManager
-      ? commandTemplateManager.getMessage('복권지급', 'success', successVars, `✅ ${targetUser.nickname}님에게 복권 ${count}장을 지급했습니다.`)
-      : `✅ ${targetUser.nickname}님에게 복권 ${count}장을 지급했습니다.`;
+      ? commandTemplateManager.getMessage('복권지급', 'success', successVars, `✅ ${targetUser.nickname}님에게 복권 ${absCount}장을 ${action}했습니다.`)
+      : `✅ ${targetUser.nickname}님에게 복권 ${absCount}장을 ${action}했습니다.`;
     await socket.message(message);
-    console.log(`[!복권지급] ${user.nickname} gave ${count} lottery tickets to ${targetUser.nickname}`);
+    console.log(`[!복권지급] ${user.nickname} ${action} ${absCount} lottery tickets to ${targetUser.nickname}`);
   } catch (error) {
     console.error('[!복권지급] Error:', error);
     const message = commandTemplateManager
