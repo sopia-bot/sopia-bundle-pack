@@ -572,8 +572,8 @@ export function UserManagement() {
     try {
       setDeleting(true);
 
-      const response = await fetch(`stp://starter-pack.sopia.dev/fanscore/user/${selectedUserForDelete.user_id}`, {
-        method: 'DELETE',
+      const response = await fetch(`stp://starter-pack.sopia.dev/fanscore/user/${selectedUserForDelete.user_id}/delete`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },

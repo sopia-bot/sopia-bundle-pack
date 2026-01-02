@@ -193,7 +193,85 @@ router.post('/user', async (req, res) => {
   }
 });
 
-// 사용자 삭제 (선택적)
+// 사용자 삭제 (POST 방식 - DELETE body 전달 문제 해결)
+router.post('/user/:userId/delete', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { categories } = req.body || {}; // ['fanscore', 'roulette']
+
+    logger.debug('Deleting user data (POST)', { userId, categories });
+
+    const userIdNum = parseInt(userId);
+    const deleteCategories = categories || ['fanscore', 'roulette'];
+
+    let deletedItems = { fanscore: false, roulette: false };
+
+    // Fanscore 데이터 삭제
+    if (deleteCategories.includes('fanscore')) {
+      const fanscoreData = await getDataFile('fanscore');
+      const userIndex = fanscoreData.findIndex((item: any) => item.user_id === userIdNum);
+
+      if (userIndex !== -1) {
+        const deletedUser = fanscoreData.splice(userIndex, 1)[0];
+        await saveDataFile('fanscore', fanscoreData);
+        deletedItems.fanscore = true;
+        logger.info('Fanscore data deleted', { userId, nickname: deletedUser.nickname });
+      }
+    }
+
+    // Roulette 데이터 삭제
+    if (deleteCategories.includes('roulette')) {
+      const rouletteData = await getDataFile('roulette');
+      let rouletteModified = false;
+
+      if (rouletteData.keepItems) {
+        const keepItemsIndex = rouletteData.keepItems.findIndex((k: any) => k.user_id === userIdNum);
+        if (keepItemsIndex !== -1) {
+          rouletteData.keepItems.splice(keepItemsIndex, 1);
+          rouletteModified = true;
+        }
+      }
+
+      if (rouletteData.tickets) {
+        const ticketsIndex = rouletteData.tickets.findIndex((t: any) => t.user_id === userIdNum);
+        if (ticketsIndex !== -1) {
+          rouletteData.tickets.splice(ticketsIndex, 1);
+          rouletteModified = true;
+        }
+      }
+
+      if (rouletteModified) {
+        await saveDataFile('roulette', rouletteData);
+      }
+
+      const historyData = await getDataFile('roulette-history');
+      const originalLength = historyData.length;
+      const filteredHistory = historyData.filter((record: any) => record.user_id !== userIdNum);
+
+      if (filteredHistory.length !== originalLength) {
+        await saveDataFile('roulette-history', filteredHistory);
+        rouletteModified = true;
+      }
+
+      if (rouletteModified) {
+        deletedItems.roulette = true;
+        logger.info('Roulette data deleted', { userId });
+      }
+    }
+
+    logger.info('User data deletion completed', { userId, deletedItems });
+    res.json({ message: 'User data deleted successfully', deletedItems });
+  } catch (error: any) {
+    logger.error('Failed to delete user data', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack || undefined,
+      userId: req.params.userId
+    });
+    res.status(500).json({ error: 'Failed to delete user data' });
+  }
+});
+
+// 사용자 삭제 (선택적) - 레거시 DELETE 방식 (body 전달 문제로 deprecated)
 router.delete('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;

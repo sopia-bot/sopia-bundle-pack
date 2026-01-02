@@ -69,8 +69,12 @@ export async function handleDeleteProfile(
   const { user, socket } = context;
 
   try {
-    const response = await fetch(`stp://${DOMAIN}/fanscore/user/${user.id}`, {
-      method: 'DELETE'
+    const response = await fetch(`stp://${DOMAIN}/fanscore/user/${user.id}/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        categories: ['fanscore']  // fanscore만 삭제, 룰렛 데이터는 유지
+      })
     });
 
     const variables = {
