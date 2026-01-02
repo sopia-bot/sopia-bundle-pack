@@ -1,8 +1,29 @@
 // apps/worker/src/commands/roulette.ts
 
+import { User } from '@sopia-bot/core';
 import type { CommandContext } from '../utils/command-parser';
 import type { RouletteManager } from '../managers/roulette-manager';
 import type { RouletteTemplate } from '../types/roulette';
+import type { FanscoreUser } from '../types/fanscore';
+
+const DOMAIN = 'starter-pack.sopia.dev';
+
+/**
+ * 현재 방의 모든 청취자 가져오기
+ */
+async function getAllListeners(liveId: number): Promise<User[]> {
+  let members: User[] = [];
+  const liveInfo = await window.$sopia.api.lives.info(liveId);
+  const authorInfo = liveInfo.res.results[0].author as User;
+  members.push(authorInfo);
+  let req = await window.$sopia.api.lives.listeners(liveId);
+  members.push(...req.res.results);
+  while (req.res.next) {
+    req = await window.$sopia.api.lives.listeners(liveId, { next: req.res.next });
+    members.push(...req.res.results);
+  }
+  return members;
+}
 
 /**
  * 템플릿 모드에 따른 설명 생성
@@ -222,6 +243,12 @@ export async function handleRouletteCommand(
   }
 
   try {
+    // !룰렛 지급 [템플릿 번호] [고유닉] [갯수]
+    if (args[0] === '지급') {
+      await handleGiveRouletteTickets(args.slice(1), context as CommandContext & { liveId: number }, rouletteManager, commandTemplateManager);
+      return;
+    }
+
     // !룰렛 목록 [템플릿 번호]
     if (args[0] === '목록') {
       if (args.length < 2) {
@@ -730,3 +757,159 @@ export async function handleUseCommand(
   }
 }
 
+/**
+ * !룰렛 지급 [템플릿 번호] [고유닉] [갯수] - DJ 전용, 특정 유저에게 룰렛 티켓 지급
+ * !룰렛 지급 [템플릿 번호] 전체 [갯수] - DJ 전용, 현재 방에 있는 등록된 청취자에게 룰렛 티켓 지급
+ */
+export async function handleGiveRouletteTickets(
+  args: string[],
+  context: CommandContext & { liveId: number },
+  rouletteManager: RouletteManager,
+  commandTemplateManager?: any
+): Promise<void> {
+  const { user, socket, liveId } = context;
+
+  const variables = {
+    nickname: user.nickname,
+    tag: user.tag || user.nickname
+  };
+
+  // DJ만 사용 가능 (매니저 제외)
+  if (!user.is_dj) {
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_not_admin', variables, '❌ 이 명령어는 DJ만 사용할 수 있습니다.')
+      : '❌ 이 명령어는 DJ만 사용할 수 있습니다.';
+    await socket.message(message);
+    return;
+  }
+
+  // args: [템플릿 번호] [고유닉 또는 전체] [갯수]
+  if (args.length < 3) {
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_usage', variables, '❌ 사용법: !룰렛 지급 [템플릿 번호] [고유닉] [갯수] 또는 !룰렛 지급 [템플릿 번호] 전체 [갯수]')
+      : '❌ 사용법: !룰렛 지급 [템플릿 번호] [고유닉] [갯수] 또는 !룰렛 지급 [템플릿 번호] 전체 [갯수]';
+    await socket.message(message);
+    return;
+  }
+
+  const templateNumber = parseInt(args[0]);
+  const target = args[1];
+  const count = parseInt(args[2]);
+
+  // 템플릿 번호 유효성 검사
+  if (isNaN(templateNumber)) {
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_invalid_template', variables, '❌ 올바른 템플릿 번호를 입력해주세요.')
+      : '❌ 올바른 템플릿 번호를 입력해주세요.';
+    await socket.message(message);
+    return;
+  }
+
+  const templates = rouletteManager.getAllTemplates();
+  if (templateNumber < 1 || templateNumber > templates.length) {
+    const vars = { ...variables, max: templates.length };
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_template_range', vars, `❌ 템플릿 번호는 1부터 ${templates.length}까지 입니다.`)
+      : `❌ 템플릿 번호는 1부터 ${templates.length}까지 입니다.`;
+    await socket.message(message);
+    return;
+  }
+
+  const template = templates[templateNumber - 1];
+
+  // 갯수 유효성 검사
+  if (isNaN(count) || count <= 0) {
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_invalid_count', variables, '❌ 갯수는 1 이상의 숫자여야 합니다.')
+      : '❌ 갯수는 1 이상의 숫자여야 합니다.';
+    await socket.message(message);
+    return;
+  }
+
+  try {
+    // 전체 지급 (현재 방에 있는 등록된 청취자만)
+    if (target === '전체') {
+      // 1. 현재 방의 모든 청취자 가져오기
+      const listeners = await getAllListeners(liveId);
+      console.log(`[!룰렛 지급 전체] Found ${listeners.length} listeners in the room`);
+
+      // 2. 등록된 사용자 목록 가져오기
+      const response = await fetch(`stp://${DOMAIN}/fanscore/ranking`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
+      const registeredUsers: FanscoreUser[] = await response.json();
+      const registeredUserIds = new Set(registeredUsers.map(u => u.user_id));
+
+      // 3. 방에 있는 청취자 중 등록된 사용자만 필터링
+      const targetUsers = listeners.filter(listener => registeredUserIds.has(listener.id));
+
+      if (targetUsers.length === 0) {
+        const message = commandTemplateManager
+          ? commandTemplateManager.getMessage('룰렛지급', 'error_no_listeners', variables, '⚠️ 현재 방에 등록된 청취자가 없습니다.')
+          : '⚠️ 현재 방에 등록된 청취자가 없습니다.';
+        await socket.message(message);
+        return;
+      }
+
+      // 4. 필터링된 유저들에게 룰렛 티켓 지급
+      for (const listener of targetUsers) {
+        await rouletteManager.giveTickets(
+          listener.id,
+          listener.nickname,
+          listener.tag || listener.nickname,
+          template.template_id,
+          count
+        );
+      }
+
+      const successVars = { ...variables, user_count: targetUsers.length, count, template_name: template.name };
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('룰렛지급', 'success_all', successVars, `✅ 현재 방에 있는 ${targetUsers.length}명에게 ${template.name} 룰렛 티켓 ${count}장씩 지급했습니다.`)
+        : `✅ 현재 방에 있는 ${targetUsers.length}명에게 ${template.name} 룰렛 티켓 ${count}장씩 지급했습니다.`;
+      await socket.message(message);
+      console.log(`[!룰렛 지급 전체] ${user.nickname} gave ${count} ${template.name} tickets to ${targetUsers.length} users`);
+      return;
+    }
+
+    // 특정 유저 지급
+    const targetTag = target;
+
+    const userResponse = await fetch(`stp://${DOMAIN}/fanscore/user-by-tag/${encodeURIComponent(targetTag)}`);
+
+    if (userResponse.status === 404) {
+      const vars = { ...variables, target_tag: targetTag };
+      const message = commandTemplateManager
+        ? commandTemplateManager.getMessage('룰렛지급', 'error_user_not_found', vars, `⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`)
+        : `⚠️ "${targetTag}" 사용자를 찾을 수 없습니다.`;
+      await socket.message(message);
+      return;
+    }
+
+    const targetUser: FanscoreUser = await userResponse.json();
+
+    // 룰렛 티켓 지급
+    await rouletteManager.giveTickets(
+      targetUser.user_id,
+      targetUser.nickname,
+      targetUser.tag,
+      template.template_id,
+      count
+    );
+
+    const successVars = { ...variables, target_nickname: targetUser.nickname, count, template_name: template.name };
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'success', successVars, `✅ ${targetUser.nickname}님에게 ${template.name} 룰렛 티켓 ${count}장을 지급했습니다.`)
+      : `✅ ${targetUser.nickname}님에게 ${template.name} 룰렛 티켓 ${count}장을 지급했습니다.`;
+    await socket.message(message);
+    console.log(`[!룰렛 지급] ${user.nickname} gave ${count} ${template.name} tickets to ${targetUser.nickname}`);
+  } catch (error) {
+    console.error('[!룰렛 지급] Error:', error);
+    const message = commandTemplateManager
+      ? commandTemplateManager.getMessage('룰렛지급', 'error_failed', variables, '❌ 룰렛 티켓 지급에 실패했습니다.')
+      : '❌ 룰렛 티켓 지급에 실패했습니다.';
+    await socket.message(message);
+  }
+}
