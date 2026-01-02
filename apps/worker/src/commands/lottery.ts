@@ -128,14 +128,15 @@ export async function handleGiveLottery(
   fanscoreManager: FanscoreManager,
   commandTemplateManager?: any
 ): Promise<void> {
-  const { user, socket, isAdmin, liveId } = context;
+  const { user, socket, liveId } = context;
 
   const variables = {
     nickname: user.nickname,
     tag: user.tag || user.nickname
   };
 
-  if (!isAdmin) {
+  // DJ만 사용 가능 (매니저 제외)
+  if (!user.is_dj) {
     const message = commandTemplateManager
       ? commandTemplateManager.getMessage('복권지급', 'error_not_admin', variables, '❌ 이 명령어는 DJ만 사용할 수 있습니다.')
       : '❌ 이 명령어는 DJ만 사용할 수 있습니다.';
