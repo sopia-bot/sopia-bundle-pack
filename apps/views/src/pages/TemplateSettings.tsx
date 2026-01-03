@@ -193,25 +193,27 @@ export function TemplateSettings() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">템플릿 설정</h1>
             <p className="text-gray-600 text-lg">룰렛 템플릿을 생성하고 관리합니다</p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setMigrationDialogOpen(true)}
-              variant="outline"
-              className="flex items-center gap-2"
-              size="lg"
-            >
-              <Download size={20} />
-              룰렛 템플릿 마이그레이션
-            </Button>
-            <Button
-              onClick={createNewTemplate}
-              className="flex items-center gap-2"
-              size="lg"
-            >
-              <Plus size={20} />
-              새 템플릿
-            </Button>
-          </div>
+          {!isEditing && (
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setMigrationDialogOpen(true)}
+                variant="outline"
+                className="flex items-center gap-2"
+                size="lg"
+              >
+                <Download size={20} />
+                룰렛 템플릿 마이그레이션
+              </Button>
+              <Button
+                onClick={createNewTemplate}
+                className="flex items-center gap-2"
+                size="lg"
+              >
+                <Plus size={20} />
+                새 템플릿
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Template List */}

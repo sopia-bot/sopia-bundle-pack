@@ -259,6 +259,25 @@ router.post('/user/:userId/delete', async (req, res) => {
       }
     }
 
+    // Worker에 캐시 삭제 알림
+    if (deletedItems.fanscore) {
+      try {
+        const { BrowserWindow } = require('electron');
+        const window = BrowserWindow.getAllWindows()[0];
+        if (window) {
+          window.webContents.send('starter-pack.sopia.dev', {
+            channel: 'user-cache-clear',
+            data: { userId: userIdNum }
+          });
+          logger.debug('Worker notified of user cache clear', { userId });
+        }
+      } catch (notifyError: any) {
+        logger.warn('Failed to notify worker of user cache clear', {
+          error: notifyError?.message || 'Unknown error'
+        });
+      }
+    }
+
     logger.info('User data deletion completed', { userId, deletedItems });
     res.json({ message: 'User data deleted successfully', deletedItems });
   } catch (error: any) {

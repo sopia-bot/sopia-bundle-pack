@@ -555,6 +555,13 @@ function backgroundListener(event: any, data: { channel: string; data?: any }): 
                 console.log(`[Worker] Lottery cache updated for user ${data.data.userId}: ${data.data.lottery_tickets} tickets`);
             }
             break;
+        case 'user-cache-clear':
+            // 사용자 캐시 삭제 (사용자 데이터 삭제 시)
+            if (data.data && data.data.userId) {
+                fanscoreManager.clearUserCache(data.data.userId);
+                console.log(`[Worker] User cache cleared for user ${data.data.userId}`);
+            }
+            break;
         case 'send-chat-message':
             // 채팅 메시지 전송 요청
             if (data.data && data.data.message) {

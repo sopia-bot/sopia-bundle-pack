@@ -101,6 +101,21 @@ export class FanscoreManager {
   }
 
   /**
+   * 사용자 캐시 삭제 (외부에서 호출)
+   */
+  clearUserCache(userId: number): void {
+    if (this.userCache.has(userId)) {
+      this.userCache.delete(userId);
+      console.log(`[FanscoreManager] User cache cleared for ${userId}`);
+    }
+    // pendingUpdates에서도 제거
+    if (this.pendingUpdates.has(userId)) {
+      this.pendingUpdates.delete(userId);
+      console.log(`[FanscoreManager] Pending updates cleared for ${userId}`);
+    }
+  }
+
+  /**
    * 출석 체크 (채팅 시 자동)
    */
   async checkAttendance(user: User): Promise<boolean> {
